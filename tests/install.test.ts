@@ -113,8 +113,41 @@ test("installed entry gates memory tools but offers consent-based onboarding out
   assert.ok(extension.tools.has("hindsight_memory"));
   assert.ok(extension.handlers.has("before_agent_start"));
   assert.equal(extension.handlers.get("session_start")?.length, 1);
-  assert.ok(await readFile(join(outside, ".pi-memory-scope.json")));
+  const restoredMarkerPath = join(outside, ".pi-memory-scope.json");
+  const originalMarker = await readFile(restoredMarkerPath, "utf8");
   assert.equal(server.requests.length, 0);
+  await rm(restoredMarkerPath);
+  const restoration = await loadExtensions([entry], outside);
+  assert.deepEqual(restoration.errors, []);
+  const restoredExtension = restoration.extensions[0];
+  assert.ok(restoredExtension);
+  assert.equal(restoredExtension.tools.size, 0);
+  const restoreOnStart = restoredExtension.handlers.get("session_start")?.[0];
+  assert.ok(restoreOnStart);
+  const restorationPrompts: string[] = [];
+  const restoreContext = {
+    ...approved,
+    ui: {
+      ...approved.ui,
+      confirm: async (title: string) => {
+        restorationPrompts.push(title);
+        return true;
+      },
+      select: async () => {
+        throw new Error("restoration must not create another Scope");
+      },
+      input: async () => {
+        throw new Error("restoration must keep the existing name");
+      },
+    },
+  };
+  await restoreOnStart({ type: "session_start" }, restoreContext as never);
+  assert.deepEqual(restorationPrompts, ["기존 Scope 마커 복원"]);
+  assert.equal(await readFile(restoredMarkerPath, "utf8"), originalMarker);
+  assert.ok(restoredExtension.tools.has("hindsight_memory"));
+  assert.equal(server.requests.length, 0);
+  for (const stop of restoredExtension.handlers.get("session_shutdown") ?? [])
+    await stop({ type: "session_shutdown" }, restoreContext as never);
   for (const before of extension.handlers.get("before_agent_start") ?? [])
     await before(
       {

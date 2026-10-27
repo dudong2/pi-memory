@@ -11,6 +11,7 @@ import { resolveIdentity } from "./identity.ts";
 import {
   createProject,
   createScope,
+  findScopeMarkerRestoration,
   loadScopeCatalog,
   projectByName,
   qualifiedScopeName,
@@ -18,6 +19,7 @@ import {
   reassignScopeProject,
   rebindScopeRepositoryId,
   removeProjectIfEmpty,
+  restoreScopeMarker,
   updateScopeLocation,
   type ProjectRecord,
   type ScopeCatalog,
@@ -39,7 +41,18 @@ function contextGuard(ctx: ExtensionContext): () => void {
   };
 }
 
-async function registrationRoot(cwd: string): Promise<string> {
+async function registrationRoot(
+  cwd: string,
+  catalog: ScopeCatalog,
+): Promise<string> {
+  const registeredRoots = new Set<string>();
+  for (const scope of Object.values(catalog.scopes)) {
+    try {
+      registeredRoots.add(await realpath(dirname(scope.markerPath)));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
   let current = await realpath(cwd);
   for (;;) {
     for (const name of [".pi-memory-scope.json", ".git"]) {
@@ -50,6 +63,7 @@ async function registrationRoot(cwd: string): Promise<string> {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
     }
+    if (registeredRoots.has(current)) return current;
     const parent = dirname(current);
     if (parent === current) return realpath(cwd);
     current = parent;
@@ -184,6 +198,54 @@ async function repairLocation(
   return true;
 }
 
+async function restoreMissingMarker(
+  config: MemoryConfig,
+  ctx: ExtensionContext,
+  root: string,
+  repositoryId: string | undefined,
+  check: () => void,
+): Promise<"none" | "restored" | "declined"> {
+  const markerPath = join(root, ".pi-memory-scope.json");
+  try {
+    await lstat(markerPath);
+    return "none";
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const candidate = await findScopeMarkerRestoration(
+    location(config),
+    root,
+    repositoryId,
+  );
+  if (!candidate) return "none";
+  if (
+    !(await ctx.ui.confirm(
+      "기존 Scope 마커 복원",
+      `${root}\n기존 Scope: ${candidate.name}\nProject ID: ${candidate.projectId}\nScope ID: ${candidate.scopeId}\nmemoryTag: ${candidate.memoryTag}\n누락된 마커만 복원합니다. 새 Scope를 만들거나 기존 기억·카탈로그를 변경하지 않습니다.`,
+    ))
+  )
+    return "declined";
+  check();
+  await backup(config, []);
+  check();
+  await restoreScopeMarker(location(config), root, {
+    expectedScope: candidate,
+    repositoryId,
+    check,
+  });
+  const identity = await resolveIdentity(ctx.cwd, config.catalogPath);
+  if (
+    identity.scopeId !== candidate.scopeId ||
+    identity.scopeTag !== candidate.memoryTag
+  )
+    throw new Error("scope-marker-restoration-verification-failed");
+  ctx.ui.notify(
+    "기존 Scope의 마커를 복원했습니다. Scope ID·메모리 태그·기억은 유지됩니다.",
+    "info",
+  );
+  return "restored";
+}
+
 export async function ensureScopeRegistration(
   config: MemoryConfig,
   ctx: ExtensionContext,
@@ -200,8 +262,19 @@ export async function ensureScopeRegistration(
   }
   if (!ctx.hasUI) return false;
   const git = resolveGitContext(ctx.cwd);
-  const root = await registrationRoot(ctx.cwd);
+  const root = await registrationRoot(
+    ctx.cwd,
+    await loadScopeCatalog(location(config)),
+  );
   const markerPath = join(root, ".pi-memory-scope.json");
+  const restoration = await restoreMissingMarker(
+    config,
+    ctx,
+    root,
+    git?.repositoryId,
+    check,
+  );
+  if (restoration !== "none") return restoration === "restored";
   if (await repairLocation(config, ctx, root, check)) return true;
   // A declined repair is not permission to create a different identity over it.
   try {

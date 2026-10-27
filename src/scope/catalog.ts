@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  link,
   lstat,
   mkdir,
   open,
@@ -601,32 +602,104 @@ export async function updateScopeLocation(
   }
 }
 
-export async function restoreScopeMarker(
+export async function findScopeMarkerRestoration(
   dataDir: CatalogLocation,
   root: string,
   repositoryId?: string,
-  homeDir = homedir(),
-  markerName = DEFAULT_MARKER_NAME,
-): Promise<string | null> {
+): Promise<ScopeRecord | null> {
+  const canonicalRoot = await realpath(root);
   const catalog = await loadScopeCatalog(dataDir);
-  const canonicalRoot = await canonicalPath(root);
-  const portableRoot = portableCatalogPath(canonicalRoot, homeDir);
-  const candidates = Object.values(catalog.scopes).filter(
-    (scope) =>
-      scope.portableMarkerRoot === portableRoot ||
-      scope.paths.includes(canonicalRoot) ||
-      (repositoryId !== undefined && scope.repositoryId === repositoryId),
-  );
-  const candidate = candidates.length === 1 ? candidates[0] : undefined;
-  if (!candidate) return null;
-  const target = join(canonicalRoot, markerName);
-  try {
-    if ((await stat(target)).isFile()) return target;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  const candidates: ScopeRecord[] = [];
+  // Historical paths, portable aliases and matching Git remotes are not proof
+  // that this directory owns an identity. Only the currently registered root is.
+  for (const [id, scope] of Object.entries(catalog.scopes)) {
+    let registeredRoot: string;
+    try {
+      registeredRoot = await realpath(dirname(scope.markerPath));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw error;
+    }
+    if (registeredRoot !== canonicalRoot) continue;
+    if (
+      scope.scopeId !== id ||
+      resolve(scope.markerPath) !==
+        join(resolve(dirname(scope.markerPath)), DEFAULT_MARKER_NAME)
+    )
+      throw new Error("invalid-scope-restoration-binding");
+    candidates.push(scope);
   }
-  await writeJsonAtomic(target, candidate.marker);
-  return target;
+  if (candidates.length > 1)
+    throw new Error("scope-marker-restoration-ambiguous");
+  const candidate = candidates[0];
+  if (!candidate) return null;
+  const marker = parseScopeMarker(candidate.marker);
+  if (
+    !candidate.projectId ||
+    catalog.projects[candidate.projectId]?.projectId !== candidate.projectId ||
+    marker.scopeId !== candidate.scopeId ||
+    marker.projectId !== candidate.projectId ||
+    marker.kind !== candidate.kind ||
+    marker.scopeName !== candidate.name ||
+    !candidate.memoryTag?.trim()
+  )
+    throw new Error("scope-marker-restoration-binding-mismatch");
+  if (
+    repositoryId &&
+    candidate.repositoryId &&
+    repositoryId !== candidate.repositoryId
+  )
+    throw new Error("scope-marker-restoration-repository-mismatch");
+  return candidate;
+}
+
+export async function restoreScopeMarker(
+  dataDir: CatalogLocation,
+  root: string,
+  options: {
+    expectedScope: ScopeRecord;
+    repositoryId?: string;
+    check?: () => void;
+  },
+): Promise<string> {
+  const release = await acquireLock(`${catalogPath(dataDir)}.lock`);
+  const check = options.check ?? (() => {});
+  try {
+    check();
+    const canonicalRoot = await realpath(root);
+    const candidate = await findScopeMarkerRestoration(
+      dataDir,
+      canonicalRoot,
+      options.repositoryId,
+    );
+    if (
+      !candidate ||
+      JSON.stringify(candidate) !== JSON.stringify(options.expectedScope)
+    )
+      throw new Error("scope-marker-restoration-binding-changed");
+    const target = join(canonicalRoot, DEFAULT_MARKER_NAME);
+    const temporary = `${target}.restore-${randomUUID()}`;
+    check();
+    const handle = await open(temporary, "wx", 0o600);
+    try {
+      try {
+        await handle.writeFile(
+          `${JSON.stringify(candidate.marker, null, 2)}\n`,
+        );
+      } finally {
+        await handle.close();
+      }
+      check();
+      // Publish a complete file atomically, without replacing even a dangling
+      // symlink or a marker another writer created while confirmation was open.
+      await link(temporary, target);
+    } finally {
+      await unlink(temporary);
+    }
+    return target;
+  } finally {
+    await release();
+  }
 }
 
 export async function removeScope(

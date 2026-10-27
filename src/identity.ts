@@ -6,12 +6,39 @@ function missing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
+async function registeredRoots(catalogPath: string): Promise<Set<string>> {
+  try {
+    let raw: string;
+    try {
+      raw = await readFile(catalogPath, "utf8");
+    } catch (error) {
+      if (missing(error)) return new Set();
+      throw error;
+    }
+    const catalog = object(JSON.parse(raw));
+    const roots = new Set<string>();
+    for (const value of Object.values(object(catalog.scopes))) {
+      const markerPath = nonempty(object(value).markerPath);
+      try {
+        roots.add(await realpath(dirname(markerPath)));
+      } catch (error) {
+        if (!missing(error)) throw error;
+      }
+    }
+    return roots;
+  } catch (error) {
+    if (error instanceof MemoryError) throw error;
+    throw new MemoryError("identity-unavailable");
+  }
+}
+
 // Read-only resolution: never create markers, register scopes, or infer a tag.
 export async function resolveIdentity(
   cwd: string,
   catalogPath: string,
 ): Promise<Identity> {
   let root = await realpath(cwd);
+  let knownRoots: Promise<Set<string>> | undefined;
   for (;;) {
     const markerPath = join(root, ".pi-memory-scope.json");
     let raw: string;
@@ -30,6 +57,11 @@ export async function resolveIdentity(
           throw new MemoryError("repository-boundary-unreadable");
         }
       }
+      // A registered directory remains a boundary even if its marker was lost.
+      // Never borrow an ancestor Scope's memories while restoration is pending.
+      knownRoots ??= registeredRoots(catalogPath);
+      if ((await knownRoots).has(root))
+        throw new MemoryError("scope-unregistered");
       const parent = dirname(root);
       if (parent === root) throw new MemoryError("scope-unregistered");
       root = parent;
