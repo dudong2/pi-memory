@@ -1,0 +1,38 @@
+{
+  "name": "pi-memory",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "src",
+    "THIRD_PARTY_NOTICES"
+  ],
+  "type": "module",
+  "description": "Lightweight Pi–Hindsight memory bridge",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "pi": {
+    "extensions": [
+      "./src/pi-memory.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.ts",
+    "test:unit": "node --test tests/context.test.ts tests/startup.test.ts tests/identity.test.ts tests/runtime.test.ts tests/delivery.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format ."
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.4.0",
+    "@earendil-works/pi-ai": "^1.4.0",
+    "@types/node": "^22.0.0",
+    "@biomejs/biome": "^2.0.0",
+    "typescript": "^6.0.3"
+  }
+}
