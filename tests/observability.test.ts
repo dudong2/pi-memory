@@ -140,18 +140,16 @@ test("context inspection counts fetched/packed/omitted records without exposing 
   );
 });
 
-test("status distinguishes preparation, context attachment and provider payload observation", async () => {
+test("status distinguishes a prepared turn reference from provider payload observation", async () => {
   const h = harness();
-  await h.emit("before_agent_start", prompt);
+  const prepared = (await h.emit("before_agent_start", prompt)) as {
+    message: { content: string };
+  };
   let status = await h.call({ action: "status" });
   assert.equal(status.delivery, "disabled");
   assert.equal(status.observation.context.state, "prepared");
-  assert.equal(status.observation.context.contextHookCalls, 0);
   assert.equal(status.observation.context.providerPayloadChecks, 0);
-  const attached = (await h.emit("context", { messages: [] })) as {
-    messages: { content: string }[];
-  };
-  const reference = attached.messages.at(-1)?.content;
+  const reference = prepared.message.content;
   assert.ok(reference);
   await h.emit("before_provider_request", {
     payload: { input: [{ content: "not the memory reference" }] },
@@ -163,7 +161,6 @@ test("status distinguishes preparation, context attachment and provider payload 
     payload: { input: [{ content: [{ text: reference }] }] },
   });
   status = await h.call({ action: "status" });
-  assert.equal(status.observation.context.contextHookCalls, 1);
   assert.equal(status.observation.context.providerPayloadChecks, 2);
   assert.equal(status.observation.context.providerPayloadMatches, 1);
   assert.equal(status.observation.context.answerUse, "not-assessed");

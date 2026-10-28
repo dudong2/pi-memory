@@ -18,7 +18,6 @@ type ContextTrace = {
   scope: Pick<ContextInspection, "scopeId" | "projectId"> | null;
   code?: string;
   elapsedMs: number;
-  contextHookCalls: number;
   providerPayloadChecks: number;
   providerPayloadMatches: number;
   answerUse: "not-assessed";
@@ -269,7 +268,6 @@ export function registerMemory(
             : (result.scope ?? null),
         ...(result.status === "unavailable" ? { code: result.code } : {}),
         elapsedMs: performance.now() - started,
-        contextHookCalls: 0,
         providerPayloadChecks: 0,
         providerPayloadMatches: 0,
         answerUse: "not-assessed",
@@ -279,8 +277,9 @@ export function registerMemory(
           ? result.context.text
           : `Memory reference unavailable (${result.code}); this is not an empty search. Do not assume prior approval; ask before risky actions.`,
     };
+    const active = reference;
     await capture(
-      reference,
+      active,
       "prepared",
       {
         state: reference.trace.state,
@@ -299,6 +298,23 @@ export function registerMemory(
       },
       ctx,
     );
+    if (
+      requestId !== requestNumber ||
+      reference !== active ||
+      ctx.signal?.aborted ||
+      ctx.cwd !== cwd ||
+      ctx.sessionManager.getSessionId() !== sessionId
+    )
+      return;
+    // Let Pi append and persist this snapshot with its user turn. Re-injecting
+    // it at the tail of every provider request invalidates prior cache endpoints.
+    return {
+      message: {
+        customType: contextType,
+        content: active.text,
+        display: false,
+      },
+    };
   });
 
   pi.on("agent_settled", async (event, ctx) => {
@@ -578,7 +594,6 @@ export function registerMemory(
             payloadContainsReference(event.payload, lookup.result),
           )
           .map((lookup) => lookup.toolCallId),
-        contextHookCalls: active.trace.contextHookCalls,
         answerUse: "not-assessed",
       },
       ctx,
@@ -601,31 +616,6 @@ export function registerMemory(
           ctx,
         );
     }
-  });
-
-  pi.on("context", (event, ctx) => {
-    // Request-local injection, not a second persistent memory store. Remove any
-    // earlier copy instead of accumulating one memory message per user request.
-    const messages = event.messages.filter(
-      (message) =>
-        message.role !== "custom" || message.customType !== contextType,
-    );
-    if (
-      reference &&
-      reference.cwd === ctx.cwd &&
-      reference.sessionId === ctx.sessionManager.getSessionId()
-    ) {
-      linkUser(reference, ctx);
-      reference.trace.contextHookCalls++;
-      messages.push({
-        role: "custom",
-        customType: contextType,
-        content: reference.text,
-        display: false,
-        timestamp: Date.now(),
-      });
-    }
-    return { messages };
   });
 }
 

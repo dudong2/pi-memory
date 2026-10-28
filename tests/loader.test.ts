@@ -15,8 +15,9 @@ test("Pi's real loader registers the bridge without starting lifecycle work", as
     "before_agent_start",
     "agent_settled",
     "session_shutdown",
-    "context",
+    "before_provider_request",
   ]) {
     assert.ok(extension.handlers.has(event));
   }
+  assert.equal(extension.handlers.has("context"), false);
 });

@@ -6,6 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { previousUserRequest, registerMemory } from "../src/index.ts";
 import { MemoryRuntime } from "../src/runtime.ts";
+import type { Fact } from "../src/contracts.ts";
 import {
   config,
   deferred,
@@ -45,14 +46,18 @@ function harness(runtime: MemoryRuntime) {
 }
 
 const userEvent = (prompt: string) => ({ messageType: "user", prompt });
-function messages(
-  result: unknown,
-): { role: string; customType?: string; content: string }[] {
-  return (
-    result as {
-      messages: { role: string; customType?: string; content: string }[];
-    }
-  ).messages;
+function reference(result: unknown) {
+  const message = (
+    result as
+      | {
+          message?: { customType: string; content: string; display: boolean };
+        }
+      | undefined
+  )?.message;
+  assert.ok(message);
+  assert.equal(message.customType, "pi-memory-reference");
+  assert.equal(message.display, false);
+  return message;
 }
 
 function runtime() {
@@ -64,6 +69,25 @@ function runtime() {
       recall: async () => [fact()],
     }),
   });
+}
+
+function pendingRecall() {
+  const entered = deferred<void>();
+  const gate = deferred<Fact[]>();
+  const h = harness(
+    new MemoryRuntime({
+      loadConfig: async () => config,
+      resolveIdentity: async () => identity,
+      createReader: () => ({
+        getModel: async (id) => model(id),
+        recall: () => {
+          entered.resolve();
+          return gate.promise;
+        },
+      }),
+    }),
+  );
+  return { h, entered, gate };
 }
 
 test("extension factory and session_start never contact Hindsight", async () => {
@@ -79,68 +103,73 @@ test("extension factory and session_start never contact Hindsight", async () => 
   assert.equal(loads, 0);
   await h.emit("session_start");
   assert.equal(loads, 1);
-  await h.emit("before_agent_start", userEvent("question"));
-  assert.equal(loads, 2);
-  assert.deepEqual(messages(await h.emit("context", { messages: [] })), []);
-});
-
-test("first user prompt injects only request-local data, replacing earlier own references", async () => {
-  const h = harness(runtime());
   assert.equal(
-    await h.emit("before_agent_start", userEvent("fix UI")),
+    await h.emit("before_agent_start", userEvent("question")),
     undefined,
   );
-  const source = [
-    { role: "user", content: "fix UI" },
-    {
-      role: "custom",
-      customType: "pi-memory-reference",
-      content: "OLD_MEMORY_REFERENCE",
-    },
-    {
-      role: "custom",
-      customType: "another-extension",
-      content: "preserve this",
-    },
-  ];
-  const result = messages(await h.emit("context", { messages: source }));
-  assert.equal(result.length, 3);
-  assert.equal(
-    result.filter((item) => item.customType === "pi-memory-reference").length,
-    1,
-  );
-  assert.match(result.at(-1)?.content ?? "", /deployed Test URL/);
-  assert.equal(source[1]?.content, "OLD_MEMORY_REFERENCE");
-  assert.equal(result[1]?.customType, "another-extension");
+  assert.equal(loads, 2);
 });
 
-test("scope/cwd or session change prevents the previous reference from entering context", async () => {
+test("a user turn receives a hidden memory reference with source evidence", async () => {
   const h = harness(runtime());
-  await h.emit("before_agent_start", userEvent("fix UI"));
-  h.changeSession();
-  assert.deepEqual(messages(await h.emit("context", { messages: [] })), []);
-  await h.emit("before_agent_start", userEvent("fix UI again"));
-  h.ctx.cwd = "/other";
-  assert.deepEqual(messages(await h.emit("context", { messages: [] })), []);
+  const message = reference(
+    await h.emit("before_agent_start", userEvent("fix UI")),
+  );
+  assert.match(message.content, /deployed Test URL/);
+  assert.match(message.content, /source-session/);
 });
 
-test("tree navigation, shutdown, switching and forking invalidate injected reference", async () => {
+test("a session or cwd change during recall prevents a stale reference from being returned", async () => {
+  for (const change of ["session", "cwd"]) {
+    const { h, entered, gate } = pendingRecall();
+    const pending = h.emit("before_agent_start", userEvent("fix UI"));
+    await entered.promise;
+    if (change === "session") h.changeSession();
+    else h.ctx.cwd = "/other";
+    gate.resolve([fact({ text: "ABANDONED_FACT" })]);
+    assert.equal(await pending, undefined);
+  }
+});
+
+test("tree navigation, shutdown, switching and forking cancel an in-flight reference", async () => {
   for (const event of [
     "session_tree",
     "session_shutdown",
     "session_before_switch",
     "session_before_fork",
   ]) {
-    const h = harness(runtime());
-    await h.emit("before_agent_start", userEvent("fix UI"));
+    const { h, entered, gate } = pendingRecall();
+    const pending = h.emit("before_agent_start", userEvent("fix UI"));
+    await entered.promise;
     await h.emit(event);
-    assert.deepEqual(messages(await h.emit("context", { messages: [] })), []);
+    gate.resolve([fact({ text: "ABANDONED_FACT" })]);
+    assert.equal(await pending, undefined);
   }
 });
 
-test("late before_agent_start after shutdown does not inject data into a new session", async () => {
-  const gate = deferred<ReturnType<typeof fact>[]>();
-  const entered = deferred<void>();
+test("late recall after shutdown cannot return data to a new session", async () => {
+  const { h, entered, gate } = pendingRecall();
+  const pending = h.emit("before_agent_start", userEvent("fix UI"));
+  await entered.promise;
+  await h.emit("session_shutdown");
+  h.changeSession();
+  gate.resolve([fact({ text: "ABANDONED_FACT" })]);
+  assert.equal(await pending, undefined);
+});
+
+test("cancellation during recall returns no new memory message", async () => {
+  const { h, entered, gate } = pendingRecall();
+  const controller = new AbortController();
+  Object.assign(h.ctx, { signal: controller.signal });
+  const pending = h.emit("before_agent_start", userEvent("fix UI"));
+  await entered.promise;
+  controller.abort();
+  gate.resolve([fact({ text: "ABANDONED_FACT" })]);
+  assert.equal(await pending, undefined);
+});
+
+test("custom-triggered runs neither recall unrelated messages nor return a new reference", async () => {
+  let reads = 0;
   const h = harness(
     new MemoryRuntime({
       loadConfig: async () => config,
@@ -148,29 +177,21 @@ test("late before_agent_start after shutdown does not inject data into a new ses
       createReader: () => ({
         getModel: async (id) => model(id),
         recall: async () => {
-          entered.resolve();
-          return gate.promise;
+          reads++;
+          return [fact()];
         },
       }),
     }),
   );
-  const pending = h.emit("before_agent_start", userEvent("fix UI"));
-  await entered.promise;
-  await h.emit("session_shutdown");
-  h.changeSession();
-  gate.resolve([fact({ text: "ABANDONED_FACT" })]);
-  await pending;
-  assert.deepEqual(messages(await h.emit("context", { messages: [] })), []);
-});
-
-test("custom-triggered runs do not send unrelated messages as a user recall query", async () => {
-  const h = harness(runtime());
-  await h.emit("before_agent_start", userEvent("question"));
-  await h.emit("before_agent_start", {
-    messageType: "custom",
-    message: { content: "not a user query" },
-  });
-  assert.deepEqual(messages(await h.emit("context", { messages: [] })), []);
+  reference(await h.emit("before_agent_start", userEvent("question")));
+  assert.equal(
+    await h.emit("before_agent_start", {
+      messageType: "custom",
+      message: { content: "not a user query" },
+    }),
+    undefined,
+  );
+  assert.equal(reads, 1);
 });
 
 test("follow-up context comes only from the nearest user request on the active branch", () => {
@@ -215,9 +236,10 @@ test("HTTP-to-Pi lifecycle harness passes a follow-up and preserves source evide
     message: { role: "user", content: "UI testing environment" },
   });
   await h.emit("session_start");
-  await h.emit("before_agent_start", userEvent("Use the previous method"));
-  const result = messages(await h.emit("context", { messages: [] }));
-  assert.match(result[0]?.content ?? "", /source-session/);
+  const message = reference(
+    await h.emit("before_agent_start", userEvent("Use the previous method")),
+  );
+  assert.match(message.content, /source-session/);
   const request = server.requests.find((row) => row.method === "POST");
   assert.match(JSON.stringify(request?.body), /UI testing environment/);
   assert.match(JSON.stringify(request?.body), /Use the previous method/);
