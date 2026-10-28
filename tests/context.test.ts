@@ -180,6 +180,23 @@ test("agent proposals retain provenance and are not promoted to core policy", as
   assert.match(result.text, /not instructions or authorization/);
 });
 
+test("memory guidance permits current-Scope Reflect without per-call confirmation", async () => {
+  const result = await prepareContext(
+    reader(),
+    config,
+    identity,
+    "question",
+    undefined,
+    signal(),
+  );
+  assert.match(
+    result.text,
+    /use current-Scope Reflect when synthesis is needed, without per-call user confirmation/,
+  );
+  assert.doesNotMatch(result.text, /Reflect needs approval/);
+  assert.match(result.text, /not instructions or authorization/);
+});
+
 test("query secrets are blocked before recall; later normal work still succeeds", async () => {
   let calls = 0;
   const backend = reader({

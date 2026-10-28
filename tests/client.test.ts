@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HindsightReader } from "../src/client.ts";
+import { HindsightClient, HindsightReader } from "../src/client.ts";
 import { prepareContext, recallRequest } from "../src/context.ts";
 import {
   config,
@@ -145,6 +145,68 @@ test("bounded HTTP timeout does not wait forever or expose raw transport errors"
     reader.getModel("scope-core", signal()),
     /Memory unavailable: timeout/,
   );
+});
+
+for (const override of [undefined, 180000]) {
+  test(`Reflect has an independent deadline (${override ?? "default"}) without slowing Recall`, async (t) => {
+    const server = await fakeServer(t);
+    const deadlines: number[] = [];
+    t.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
+      deadlines.push(milliseconds);
+      return new AbortController().signal;
+    });
+    const settings = {
+      ...config,
+      endpoint: server.endpoint,
+      timeoutMs: 20,
+      ...(override === undefined ? {} : { reflectTimeoutMs: override }),
+    };
+    const client = new HindsightClient(settings);
+    await client.reflect(
+      recallRequest(settings, identity, "synthesize"),
+      signal(),
+    );
+    await client.recall(recallRequest(settings, identity, "search"), signal());
+    assert.deepEqual(deadlines, [override ?? 120000, 20]);
+  });
+}
+
+test("Reflect requests v1.1 evidence instead of silently returning no sources", async (t) => {
+  const server = await fakeServer(t);
+  const settings = { ...config, endpoint: server.endpoint };
+  const result = JSON.parse(
+    await new HindsightClient(settings).reflect(
+      recallRequest(settings, identity, "synthesize"),
+      signal(),
+    ),
+  );
+  const request = server.requests[0];
+  assert.ok(request);
+  assert.deepEqual((request.body as { include: unknown }).include, {
+    facts: {},
+  });
+  assert.deepEqual(result.evidenceIds, ["source-fact"]);
+});
+
+test("caller abort promptly cancels Reflect despite its longer deadline", async (t) => {
+  const arrived = deferred<void>();
+  const gate = deferred<void>();
+  t.after(() => gate.resolve());
+  const server = await fakeServer(t, {
+    beforeReply: () => {
+      arrived.resolve();
+      return gate.promise;
+    },
+  });
+  const settings = { ...config, endpoint: server.endpoint };
+  const controller = new AbortController();
+  const request = new HindsightClient(settings).reflect(
+    recallRequest(settings, identity, "synthesize"),
+    controller.signal,
+  );
+  await arrived.promise;
+  controller.abort();
+  await assert.rejects(request, /Memory unavailable: cancelled/);
 });
 
 test("caller abort cancels a pending HTTP request", async (t) => {

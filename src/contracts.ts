@@ -69,6 +69,7 @@ export interface MemoryConfig {
   startupModels?: boolean;
   scopeModels: Record<string, string>;
   timeoutMs: number;
+  reflectTimeoutMs?: number;
   maxContextBytes: number;
   outboxPath?: string;
   evidence?: EvidenceConfig;

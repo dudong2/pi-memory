@@ -150,8 +150,27 @@ test("config is opt-in and has no default server or bank", async () => {
   );
   assert.deepEqual(parseConfig(config), {
     ...config,
+    reflectTimeoutMs: 120000,
     scopeModels: Object.assign(Object.create(null), config.scopeModels),
   });
+});
+
+test("Reflect deadline is independently configurable and remains bounded", () => {
+  assert.deepEqual(parseConfig({ ...config, reflectTimeoutMs: 180000 }), {
+    ...config,
+    reflectTimeoutMs: 180000,
+    scopeModels: Object.assign(Object.create(null), config.scopeModels),
+  });
+  for (const value of [0, -1, 300001, 1.5, "120000"]) {
+    assert.throws(
+      () => parseConfig({ ...config, reflectTimeoutMs: value }),
+      /invalid-config/,
+    );
+  }
+  assert.throws(
+    () => parseConfig({ ...config, timeoutMs: 30001 }),
+    /invalid-config/,
+  );
 });
 
 test("missing startup model IDs do not disable the bridge and outbox is an explicit opt-in", () => {

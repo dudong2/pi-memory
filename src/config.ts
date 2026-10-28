@@ -8,6 +8,8 @@ import {
   object,
 } from "./contracts.ts";
 
+export const defaultReflectTimeoutMs = 120000;
+
 function integer(
   value: unknown,
   fallback: number,
@@ -56,6 +58,7 @@ export function parseConfig(value: unknown): MemoryConfig {
     "startupModels",
     "scopeModels",
     "timeoutMs",
+    "reflectTimeoutMs",
     "maxContextBytes",
     "outboxPath",
     "evidence",
@@ -77,6 +80,12 @@ export function parseConfig(value: unknown): MemoryConfig {
     catalogPath,
     scopeModels,
     timeoutMs: integer(data.timeoutMs, 5000, 10, 30000),
+    reflectTimeoutMs: integer(
+      data.reflectTimeoutMs,
+      defaultReflectTimeoutMs,
+      10,
+      300000,
+    ),
     // Conservative UTF-8 byte ceiling, not a measured model-token count.
     maxContextBytes: integer(data.maxContextBytes, 16000, 2048, 64000),
   };

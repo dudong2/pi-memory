@@ -12,7 +12,7 @@ import {
   type RecallRequest,
   tags,
 } from "./contracts.ts";
-import { safeEndpoint } from "./config.ts";
+import { defaultReflectTimeoutMs, safeEndpoint } from "./config.ts";
 import { containsSecret, containsSecretData } from "./safety.ts";
 import type { MemoryWriter } from "./contracts.ts";
 import type { RetainRequest } from "./outbox.ts";
@@ -148,8 +148,9 @@ export class HindsightReader implements MemoryReader {
     body: object | undefined,
     signal: AbortSignal,
     allowMissing = false,
+    timeoutMs = this.config.timeoutMs,
   ): Promise<unknown> {
-    const timeout = AbortSignal.timeout(this.config.timeoutMs);
+    const timeout = AbortSignal.timeout(timeoutMs);
     const combined = AbortSignal.any([signal, timeout]);
     try {
       const headers: Record<string, string> = { Accept: "application/json" };
@@ -273,8 +274,11 @@ export class HindsightClient extends HindsightReader implements MemoryWriter {
           budget: "low",
           max_tokens: request.max_tokens,
           tag_groups: request.tag_groups,
+          include: { facts: {} },
         },
         signal,
+        false,
+        this.config.reflectTimeoutMs ?? defaultReflectTimeoutMs,
       ),
     );
     const text = nonempty(row.text);

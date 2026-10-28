@@ -203,7 +203,13 @@ export async function fakeServer(
         response.end(
           JSON.stringify({
             text: "Scoped synthesis with evidence",
-            based_on: { world: [{ id: "source-fact" }] },
+            based_on: body.include?.facts
+              ? {
+                  memories: [fact({ id: "source-fact" })],
+                  mental_models: [],
+                  directives: [],
+                }
+              : null,
           }),
         );
       } else {

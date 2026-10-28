@@ -11,7 +11,8 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { completedConversation, registerMemory } from "../src/index.ts";
 import { MemoryRuntime } from "../src/runtime.ts";
-import { config, deferred, fakeServer, identity } from "./helpers.ts";
+import { config, deferred, fakeServer, identity, model } from "./helpers.ts";
+import { startupModelId } from "../src/startup.ts";
 
 async function fixture(
   t: TestContext,
@@ -357,7 +358,7 @@ test("settled conversation is retained once with user/assistant attribution and 
   assert.deepEqual(retained?.tags, [identity.scopeTag]);
 });
 
-test("aborted conversations and unapproved Reflect do not call the backend", async (t) => {
+test("aborted conversations do not call the backend", async (t) => {
   const { memory, server } = await fixture(t),
     h = harness(memory);
   h.branch.push({
@@ -367,62 +368,104 @@ test("aborted conversations and unapproved Reflect do not call the backend", asy
   });
   assert.equal(completedConversation(h.context), undefined);
   await h.emit("agent_settled", { aborted: true });
-  await assert.rejects(
-    h.tool.execute(
-      "reflect",
-      { action: "reflect", query: "complex investigation" },
-      undefined,
-      undefined,
-      h.context,
-    ),
-    /reflect-not-approved/,
-  );
-  await assert.rejects(
-    h.tool.execute(
-      "refresh",
-      { action: "refresh" },
-      undefined,
-      undefined,
-      h.context,
-    ),
-    /refresh-not-approved/,
-  );
   assert.equal(server.requests.length, 0);
 });
 
-test("approved Reflect uses the same exact scope boundary through the real HTTP client", async (t) => {
-  const { memory, server } = await fixture(t),
-    h = harness(memory);
-  let confirmations = 0;
-  const approved = {
-    ...h.context,
-    hasUI: true,
-    ui: {
-      confirm: async () => {
-        confirmations++;
-        return true;
-      },
-    },
-  } as unknown as ExtensionToolContext;
-  const result = await h.tool.execute(
-    "reflect-approved",
-    { action: "reflect", query: "Compare the previous decisions" },
-    undefined,
-    undefined,
-    approved,
-  );
-  assert.equal(confirmations, 1);
-  assert.match(JSON.stringify(result.content), /source-fact/);
-  const request = server.requests.find((value) =>
-    value.url.endsWith("/reflect"),
-  );
-  assert.ok(request);
-  assert.deepEqual((request.body as { tag_groups: unknown }).tag_groups, [
-    {
-      or: [{ tags: [identity.scopeTag], match: "exact" }],
-    },
-  ]);
-});
+for (const hasUI of [false, true]) {
+  test(`Reflect needs no confirmation with hasUI=${hasUI} and preserves exact Scope and budget`, async (t) => {
+    const { memory, server } = await fixture(t),
+      h = harness(memory);
+    let confirmations = 0;
+    const context = {
+      ...h.context,
+      hasUI,
+      ...(hasUI
+        ? {
+            ui: {
+              confirm: async () => {
+                confirmations++;
+                return false;
+              },
+            },
+          }
+        : {}),
+    } as unknown as ExtensionToolContext;
+    const result = await h.tool.execute(
+      "reflect-without-approval",
+      { action: "reflect", query: "Compare the previous decisions" },
+      undefined,
+      undefined,
+      context,
+    );
+    assert.equal(confirmations, 0);
+    assert.match(JSON.stringify(result.content), /source-fact/);
+    assert.equal(server.requests.length, 1);
+    const request = server.requests[0];
+    assert.ok(request);
+    assert.ok(request.url.endsWith("/reflect"));
+    const body = request.body as {
+      tag_groups: unknown;
+      budget: string;
+      max_tokens: number;
+    };
+    assert.deepEqual(body.tag_groups, [
+      { or: [{ tags: [identity.scopeTag], match: "exact" }] },
+    ]);
+    assert.equal(body.budget, "low");
+    assert.ok(body.max_tokens > 0 && body.max_tokens <= 2048);
+    assert.equal(server.retained.length, 0);
+  });
+}
+
+for (const hasUI of [false, true]) {
+  test(`startup refresh needs no confirmation with hasUI=${hasUI}`, async (t) => {
+    const models: Record<string, unknown> = {};
+    const { settings, server } = await fixture(t, { models });
+    const startupSettings = {
+      ...settings,
+      startupModels: true,
+      scopeModels: {},
+    };
+    const id = startupModelId(startupSettings, [identity.scopeTag]);
+    models[id] = model(id);
+    const memory = new MemoryRuntime({
+      loadConfig: async () => startupSettings,
+      resolveIdentity: async () => identity,
+    });
+    t.after(() => memory.shutdown());
+    const h = harness(memory);
+    let confirmations = 0;
+    const context = {
+      ...h.context,
+      hasUI,
+      ...(hasUI
+        ? {
+            ui: {
+              confirm: async () => {
+                confirmations++;
+                return false;
+              },
+            },
+          }
+        : {}),
+    } as unknown as ExtensionToolContext;
+    const result = await h.tool.execute(
+      "refresh-without-approval",
+      { action: "refresh" },
+      undefined,
+      undefined,
+      context,
+    );
+    assert.equal(confirmations, 0);
+    assert.match(JSON.stringify(result.content), /submitted/);
+    const writes = server.requests.filter(
+      (request) => request.method === "POST",
+    );
+    assert.equal(writes.length, 1);
+    assert.ok(writes[0]?.url.endsWith(`/mental-models/${id}/refresh`));
+    assert.equal(server.retained.length, 0);
+  });
+}
 
 test("registered tool can remember and search through the real runtime and fake HTTP", async (t) => {
   const { memory, input, server } = await fixture(t),
