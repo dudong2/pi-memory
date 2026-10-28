@@ -39,6 +39,11 @@ export class Delivery {
   }
   enqueue(key: string, item: RetainItem): Receipt {
     if (this.closed) throw new MemoryError("delivery-closed");
+    if (
+      item.metadata.scope_type !== undefined &&
+      item.metadata.scope_type !== "current"
+    )
+      throw new MemoryError("unsupported-legacy-scope");
     const receipt = this.outbox.enqueue(key, item);
     this.kick();
     return receipt;
@@ -87,6 +92,16 @@ export class Delivery {
       const item = this.outbox.claim();
       if (!item) return;
       try {
+        if (
+          item.request.items.some(
+            (entry) =>
+              entry.metadata.scope_type !== undefined &&
+              entry.metadata.scope_type !== "current",
+          )
+        ) {
+          this.outbox.defer(item.id, "unsupported-legacy-scope", true);
+          continue;
+        }
         let status = await this.client.operation(item.id, signal);
         if (status === "not_found") {
           if (item.state === "submitted") {

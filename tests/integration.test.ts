@@ -139,7 +139,7 @@ test("pending user updates are visible without blocking ordinary Recall", async 
   const result = await memory.prepare(input);
   assert.equal(result?.status, "ready");
   if (result?.status === "ready") {
-    assert.equal(result.context.core[1]?.status, "updates-pending");
+    assert.equal(result.context.core[0]?.status, "updates-pending");
     assert.match(result.context.text, /source-session/);
     assert.doesNotMatch(
       result.context.text,
@@ -148,18 +148,17 @@ test("pending user updates are visible without blocking ordinary Recall", async 
   }
 });
 
-test("explicit common memory is opt-in and never inferred from another scope", async (t) => {
+test("explicit memory is confined to the current Scope", async (t) => {
   const { memory, input, server } = await fixture(t);
   await memory.remember({
     ...input,
-    key: "common",
+    key: "current",
     kind: "remember",
-    scope: "common",
     text: "Reply briefly",
   });
   await memory.status(input);
-  assert.deepEqual(server.retained[0]?.items[0]?.tags, ["user:test"]);
-  assert.equal(server.retained[0]?.items[0]?.metadata.scope_type, "common");
+  assert.deepEqual(server.retained[0]?.items[0]?.tags, [identity.scopeTag]);
+  assert.equal(server.retained[0]?.items[0]?.metadata.scope_type, "current");
 });
 
 test("secret memory text cannot reach HTTP or the persisted payload", async (t) => {
@@ -420,10 +419,7 @@ test("approved Reflect uses the same exact scope boundary through the real HTTP 
   assert.ok(request);
   assert.deepEqual((request.body as { tag_groups: unknown }).tag_groups, [
     {
-      or: [
-        { tags: ["user:test"], match: "exact" },
-        { tags: [identity.scopeTag], match: "exact" },
-      ],
+      or: [{ tags: [identity.scopeTag], match: "exact" }],
     },
   ]);
 });

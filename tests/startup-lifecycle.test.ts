@@ -25,10 +25,6 @@ test("native startup creation -> backend refresh -> next request reads plain mod
     outboxPath: join(root, "queue.sqlite"),
     scopeModels: {},
   };
-  settings.common = {
-    modelId: startupModelId(settings, ["user:test"]),
-    tags: ["user:test"],
-  };
   const runtime = new MemoryRuntime({
     loadConfig: async () => settings,
     resolveIdentity: async () => identity,
@@ -41,7 +37,7 @@ test("native startup creation -> backend refresh -> next request reads plain mod
   const creates = server.requests.filter(
     (r) => r.method === "POST" && r.url.endsWith("/mental-models"),
   );
-  assert.equal(creates.length, 2);
+  assert.equal(creates.length, 1);
   for (const request of creates) {
     const body = request.body as {
       id: string;
@@ -67,9 +63,9 @@ test("native startup creation -> backend refresh -> next request reads plain mod
     server.requests.filter(
       (r) => r.method === "POST" && r.url.endsWith("/mental-models"),
     ).length,
-    2,
+    1,
   );
-  const refreshed = await runtime.initializeStartup(input, true, "current");
+  const refreshed = await runtime.initializeStartup(input, true);
   assert.equal(refreshed[0]?.state, "submitted");
   assert.equal(
     server.requests.filter((r) => r.url.endsWith("/refresh")).length,
@@ -92,7 +88,6 @@ test("lost model creation response does not submit a second generation", async (
     client,
     settings,
     binding,
-    "scope",
     new AbortController().signal,
   );
   assert.equal(result.state, "existing");
@@ -117,7 +112,6 @@ test("old or trial models are never adopted and another scope cannot be refreshe
       client,
       config,
       { modelId: "scope-core", tags: [identity.scopeTag] },
-      "scope",
       new AbortController().signal,
     ),
     /unmanaged-startup-model/,
@@ -129,7 +123,6 @@ test("old or trial models are never adopted and another scope cannot be refreshe
       client,
       config,
       { modelId: id, tags: [identity.scopeTag] },
-      "scope",
       new AbortController().signal,
       true,
     ),
@@ -145,7 +138,6 @@ test("session reset during model lookup prevents later creation", async () => {
     ...config,
     startupModels: true,
     outboxPath: "/unused",
-    common: undefined,
     scopeModels: {},
   };
   const runtime = new MemoryRuntime({

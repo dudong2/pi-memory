@@ -19,7 +19,6 @@ export const config: MemoryConfig = {
   endpoint: "http://127.0.0.1:1",
   bankId: "test-bank",
   catalogPath: "/fixture/catalog.json",
-  common: { modelId: "user-core", tags: ["user:test"] },
   scopeModels: { "scope-test": "scope-core" },
   timeoutMs: 1000,
   maxContextBytes: 16000,
@@ -32,11 +31,8 @@ export function model(
   return {
     id,
     bank_id: config.bankId,
-    content:
-      id === "user-core"
-        ? "Reply concisely in Korean."
-        : "Verify UI on the deployed Test URL, not localhost.",
-    tags: id === "user-core" ? ["user:test"] : [identity.scopeTag],
+    content: "Verify UI on the deployed Test URL, not localhost.",
+    tags: [identity.scopeTag],
     is_stale: false,
     last_refreshed_at: "2026-10-26T10:00:00Z",
     last_memory_seen_at: "2026-10-26T09:59:00Z",

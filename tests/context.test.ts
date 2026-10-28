@@ -18,7 +18,7 @@ function reader(overrides: Partial<MemoryReader> = {}): MemoryReader {
 
 const signal = () => new AbortController().signal;
 
-test("first request loads designated common and scope cores without relying on recall ranking", async () => {
+test("first request loads the designated Scope core without relying on recall ranking", async () => {
   const ids: string[] = [];
   const result = await prepareContext(
     reader({
@@ -34,23 +34,20 @@ test("first request loads designated common and scope cores without relying on r
     undefined,
     signal(),
   );
-  assert.deepEqual(ids.sort(), ["scope-core", "user-core"]);
+  assert.deepEqual(ids, ["scope-core"]);
   assert.match(result.text, /deployed Test URL, not localhost/);
   assert.deepEqual(
     result.core.map((item) => item.status),
-    ["ready", "ready"],
+    ["ready"],
   );
   assert.equal(result.recall, "empty");
 });
 
-test("recall has only exact common/current-scope sets and an explicit all-type baseline", () => {
+test("recall has only the exact current-Scope set and an explicit all-type baseline", () => {
   const request = recallRequest(config, identity, "question");
   assert.deepEqual(request.tag_groups, [
     {
-      or: [
-        { tags: ["user:test"], match: "exact" },
-        { tags: [identity.scopeTag], match: "exact" },
-      ],
+      or: [{ tags: [identity.scopeTag], match: "exact" }],
     },
   ]);
   assert.deepEqual(request.types, ["observation", "world", "experience"]);
@@ -117,7 +114,7 @@ for (const [name, changes, expected] of [
       undefined,
       signal(),
     );
-    assert.equal(result.core[1]?.status, expected);
+    assert.equal(result.core[0]?.status, expected);
     assert.doesNotMatch(result.text, /OLD_RULE_MUST_NOT_APPEAR/);
   });
 }
@@ -131,7 +128,7 @@ test("missing core and unavailable backend are different from an empty recall", 
     undefined,
     signal(),
   );
-  assert.equal(missing.core[1]?.status, "missing");
+  assert.equal(missing.core[0]?.status, "missing");
   assert.equal(missing.recall, "empty");
   const failed = await prepareContext(
     reader({
@@ -148,7 +145,7 @@ test("missing core and unavailable backend are different from an empty recall", 
     undefined,
     signal(),
   );
-  assert.equal(failed.core[1]?.status, "unavailable");
+  assert.equal(failed.core[0]?.status, "unavailable");
   assert.equal(failed.recall, "unavailable");
   assert.doesNotMatch(failed.text, /private server body/);
 });
@@ -270,9 +267,8 @@ test("oversized core must not discard fitting Recall evidence", async () => {
     undefined,
     signal(),
   );
-  assert.equal(result.core[0]?.status, "ready");
-  assert.equal(result.core[1]?.status, "budget-exceeded");
-  assert.match(result.text, /Reply concisely in Korean/);
+  assert.equal(result.core[0]?.status, "budget-exceeded");
+  assert.doesNotMatch(result.text, /oversized history/);
   assert.match(result.text, /REQUIRED_DEPLOYED_TEST_RULE/);
   assert.equal(result.omitted, 0);
   assert.ok(Buffer.byteLength(result.text) <= 4096);
@@ -312,7 +308,7 @@ test("plain Mental Models work without a custom schema or manual review", async 
     undefined,
     signal(),
   );
-  assert.equal(result.core[1]?.status, "ready");
+  assert.equal(result.core[0]?.status, "ready");
   assert.match(result.text, /APPROVAL_BOUNDARIES_ONLY_MISSING_VERIFICATION/);
   assert.match(result.text, /RETRIEVABLE_VERIFICATION_RULE/);
 });
@@ -346,5 +342,5 @@ test("reloading core on the next request does not reuse a previously valid old r
     signal(),
   );
   assert.doesNotMatch(after.text, /OLD_RULE|NEW_RULE/);
-  assert.equal(after.core[1]?.status, "stale");
+  assert.equal(after.core[0]?.status, "stale");
 });

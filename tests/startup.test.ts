@@ -25,13 +25,13 @@ test("designated plain-text startup notes work when Recall is empty", async () =
   );
   assert.deepEqual(
     result.core.map((item) => item.status),
-    ["ready", "ready"],
+    ["ready"],
   );
   assert.match(result.text, /deployed site in the local browser/);
   assert.equal(result.recall, "empty");
 });
 
-test("two oversized overviews do not evict fitting Recall evidence", async () => {
+test("an oversized overview do not evict fitting Recall evidence", async () => {
   const result = await prepareContext(
     {
       getModel: async (id) =>
@@ -65,7 +65,7 @@ test("a missing or stale core never blocks ordinary scoped Recall", async () => 
       undefined,
       signal(),
     );
-    assert.equal(result.core[1]?.status, missing ? "missing" : "stale");
+    assert.equal(result.core[0]?.status, missing ? "missing" : "stale");
     assert.match(result.text, /SCOPED_DETAIL/);
     assert.doesNotMatch(result.text, /OLD_RULE/);
   }

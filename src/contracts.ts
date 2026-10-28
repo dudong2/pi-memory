@@ -54,6 +54,12 @@ export interface CoreBinding {
   tags: string[];
 }
 
+export interface EvidenceConfig {
+  directory: string;
+  retentionDays: number;
+  maxBytes: number;
+}
+
 export interface MemoryConfig {
   endpoint: string;
   bankId: string;
@@ -61,11 +67,11 @@ export interface MemoryConfig {
   apiKeyEnv?: string;
   apiKeyFile?: string;
   startupModels?: boolean;
-  common?: CoreBinding;
   scopeModels: Record<string, string>;
   timeoutMs: number;
   maxContextBytes: number;
   outboxPath?: string;
+  evidence?: EvidenceConfig;
 }
 
 export interface MentalModel {
@@ -138,15 +144,51 @@ export type CoreStatus =
   | "unavailable";
 
 export interface CoreResult {
-  kind: "common" | "scope";
+  kind: "scope";
   modelId?: string;
   status: CoreStatus;
   refreshedAt?: string | null;
   memorySeenAt?: string | null;
 }
 
+export interface ContextInspection {
+  projectId: string;
+  scopeId: string;
+  core: Pick<CoreResult, "kind" | "status">[];
+  recall: PreparedContext["recall"];
+  fetchedFacts: number;
+  includedFacts: number;
+  omittedFacts: number;
+  excluded: {
+    scopeMismatch: number;
+    secretBlocked: number;
+    duplicate: number;
+    budget: number;
+  };
+  retrievedFactIds: string[];
+  contextBytes: number;
+  factIds: string[];
+  modelIds: string[];
+  documentIds: string[];
+}
+
+export interface LookupInspection {
+  projectId: string;
+  scopeId: string;
+  action: "search" | "reflect";
+  state: "succeeded" | "failed";
+  elapsedMs: number;
+  code?: string;
+  resultBytes?: number;
+  fetchedFacts?: number;
+  includedFacts?: number;
+  omittedFacts?: number;
+  factIds?: string[];
+}
+
 export interface PreparedContext {
   text: string;
+  inspection: ContextInspection;
   core: CoreResult[];
   recall:
     | "found"

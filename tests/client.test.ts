@@ -25,9 +25,9 @@ test("fake HTTP server verifies real v1.1.0 paths, model IDs, and exact recall f
     undefined,
     signal(),
   );
-  assert.equal(result.core[1]?.status, "ready");
+  assert.equal(result.core[0]?.status, "ready");
   assert.equal(result.recall, "found");
-  assert.equal(server.requests.length, 3);
+  assert.equal(server.requests.length, 2);
   assert.ok(
     server.requests.some(
       (request) =>
@@ -65,7 +65,7 @@ test("404 core is missing, while 503 recall is unavailable and server error text
     undefined,
     signal(),
   );
-  assert.equal(result.core[1]?.status, "missing");
+  assert.equal(result.core[0]?.status, "missing");
   assert.equal(result.recall, "unavailable");
   assert.doesNotMatch(result.text, /PRIVATE_SERVER_ERROR/);
 });

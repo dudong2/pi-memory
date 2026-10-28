@@ -134,7 +134,7 @@ test("config is opt-in and has no default server or bank", async () => {
   );
   assert.throws(
     () => parseConfig({ ...config, common: { modelId: "user", tags: [] } }),
-    /empty-common-tags/,
+    /invalid-config/,
   );
   assert.throws(
     () => parseConfig({ ...config, bankID: "typo" }),
@@ -157,12 +157,11 @@ test("config is opt-in and has no default server or bank", async () => {
 test("missing startup model IDs do not disable the bridge and outbox is an explicit opt-in", () => {
   const settings = parseConfig({
     ...config,
-    common: undefined,
     scopeModels: undefined,
     outboxPath: "/fixture/outbox.sqlite",
   });
   assert.deepEqual(Object.keys(settings.scopeModels), []);
-  assert.equal(settings.common, undefined);
+  assert.equal("common" in settings, false);
   assert.equal(settings.outboxPath, "/fixture/outbox.sqlite");
   assert.throws(
     () => parseConfig({ ...config, outboxPath: "relative.sqlite" }),

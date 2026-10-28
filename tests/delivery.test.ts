@@ -60,6 +60,28 @@ function writer(): MemoryWriter & {
   };
 }
 
+test("legacy non-current Scope deliveries are preserved but never transmitted", async (t) => {
+  const path = await fixture(t);
+  const client = { ...writer(), destinationIdentity: "legacy-destination" };
+  const queue = await Outbox.open(path, client.destinationIdentity);
+  const receipt = queue.enqueue("legacy-common", {
+    ...item(),
+    metadata: { scope_type: "common" },
+  });
+  queue.close();
+  const delivery = await Delivery.open({ ...config, outboxPath: path }, client);
+  t.after(() => delivery.close());
+  await delivery.flush();
+  assert.deepEqual(client.posts, []);
+  assert.equal(delivery.status().failed, 1);
+  db(path, (sql) =>
+    assert.ok(
+      sql.prepare("SELECT payload FROM deliveries WHERE id=?").get(receipt.id)
+        ?.payload,
+    ),
+  );
+});
+
 test("queue is private, durable, idempotent, and erases confirmed payloads", async (t) => {
   const path = await fixture(t),
     q = await Outbox.open(path, "destination");

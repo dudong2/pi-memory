@@ -6,7 +6,6 @@ import {
   MemoryError,
   nonempty,
   object,
-  tags,
 } from "./contracts.ts";
 
 function integer(
@@ -55,11 +54,11 @@ export function parseConfig(value: unknown): MemoryConfig {
     "apiKeyEnv",
     "apiKeyFile",
     "startupModels",
-    "common",
     "scopeModels",
     "timeoutMs",
     "maxContextBytes",
     "outboxPath",
+    "evidence",
   ];
   if (Object.keys(data).some((key) => !keys.includes(key)))
     throw new MemoryError("invalid-config");
@@ -104,15 +103,27 @@ export function parseConfig(value: unknown): MemoryConfig {
       throw new MemoryError("startup-requires-delivery");
     config.startupModels = data.startupModels;
   }
-  if (data.common !== undefined) {
-    const common = object(data.common);
-    if (Object.keys(common).some((key) => !["modelId", "tags"].includes(key))) {
-      throw new MemoryError("invalid-config");
-    }
-    const commonTags = tags(common.tags);
-    // No implicit untagged/global memory access in this prototype.
-    if (!commonTags.length) throw new MemoryError("empty-common-tags");
-    config.common = { modelId: nonempty(common.modelId), tags: commonTags };
+  if (data.evidence !== undefined) {
+    const evidence = object(data.evidence);
+    if (
+      Object.keys(evidence).some(
+        (key) => !["directory", "retentionDays", "maxBytes"].includes(key),
+      )
+    )
+      throw new MemoryError("invalid-evidence-config");
+    const directory = nonempty(evidence.directory);
+    if (!isAbsolute(directory))
+      throw new MemoryError("evidence-path-not-absolute");
+    config.evidence = {
+      directory,
+      retentionDays: integer(evidence.retentionDays, 30, 1, 3650),
+      maxBytes: integer(
+        evidence.maxBytes,
+        256 * 1024 * 1024,
+        4096,
+        1024 * 1024 * 1024,
+      ),
+    };
   }
   return config;
 }

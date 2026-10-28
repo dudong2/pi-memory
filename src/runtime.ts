@@ -11,6 +11,8 @@ import {
 } from "./startup.ts";
 import { prepareContext, recallRequest } from "./context.ts";
 import { containsSecretData } from "./safety.ts";
+import { safeRecordIds } from "./observability.ts";
+import { EvidenceStore, type EvidenceEvent } from "./evidence.ts";
 import {
   type Identity,
   type MemoryConfig,
@@ -19,6 +21,7 @@ import {
   type MemoryWriter,
   sameTags,
   type PreparedContext,
+  type LookupInspection,
 } from "./contracts.ts";
 import { resolveIdentity } from "./identity.ts";
 
@@ -31,7 +34,11 @@ export interface RuntimeInput {
 
 export type RuntimeResult =
   | { status: "disabled" }
-  | { status: "unavailable"; code: string }
+  | {
+      status: "unavailable";
+      code: string;
+      scope?: Pick<Identity, "scopeId" | "projectId">;
+    }
   | { status: "ready"; context: PreparedContext };
 
 interface Dependencies {
@@ -47,7 +54,6 @@ export interface WriteInput extends RuntimeInput {
   kind: "conversation" | "remember" | "correct" | "retract";
   text: string;
   documentId?: string;
-  scope?: "current" | "common";
 }
 
 // One live request per extension runtime; a newer run invalidates all older work,
@@ -57,6 +63,14 @@ export class MemoryRuntime {
   private controller: AbortController | undefined;
   private readonly deps: Dependencies;
   private readonly deliveries = new Map<string, Promise<Delivery>>();
+  private readonly evidenceStores = new Map<string, EvidenceStore>();
+  private evidenceError: string | undefined;
+  private evidenceWrites = 0;
+  private evidenceFailures = 0;
+  private lookupSequence = 0;
+  private lastLookup:
+    | { cwd: string; sessionId: string; data: LookupInspection }
+    | undefined;
 
   constructor(deps: Partial<Dependencies> = {}) {
     this.deps = {
@@ -73,6 +87,7 @@ export class MemoryRuntime {
     this.generation++;
     this.controller?.abort();
     this.controller = undefined;
+    this.lastLookup = undefined;
   }
 
   private async bound(input: RuntimeInput, signal?: AbortSignal) {
@@ -116,15 +131,14 @@ export class MemoryRuntime {
     input: WriteInput,
     signal?: AbortSignal,
   ): Promise<Receipt | undefined> {
+    if ("scope" in input) throw new MemoryError("scope-argument-removed");
     const binding = await this.bound(input, signal);
     if (!binding || !binding.config.outboxPath) {
       if (input.kind === "conversation") return undefined;
       throw new MemoryError("delivery-disabled");
     }
     const { config, identity, check } = binding;
-    const scope =
-      input.scope === "common" ? config.common?.tags : [identity.scopeTag];
-    if (!scope) throw new MemoryError("common-scope-not-configured");
+    const scope = [identity.scopeTag];
     if (!input.text.trim()) throw new MemoryError("empty-memory");
     const namespace = fingerprint([
       config.endpoint,
@@ -168,7 +182,7 @@ export class MemoryRuntime {
           session_id: input.sessionId,
           scope_id: identity.scopeId,
           project_id: identity.projectId,
-          scope_type: input.scope ?? "current",
+          scope_type: "current",
           ...(correcting ? { supersedes: documentId } : {}),
         },
       },
@@ -181,36 +195,83 @@ export class MemoryRuntime {
     reflect: boolean,
     signal = new AbortController().signal,
   ): Promise<string> {
+    const epoch = this.generation;
+    const sequence = ++this.lookupSequence;
+    const started = performance.now();
     checkQuery(query);
     const binding = await this.bound(input, signal);
     if (!binding) throw new MemoryError("memory-disabled");
     const { config, identity, check } = binding;
     const request = recallRequest(config, identity, query);
-    if (reflect) {
-      const text = await this.deps
-        .createWriter(config)
-        .reflect(request, signal);
+    const record = (
+      data: Omit<
+        LookupInspection,
+        "projectId" | "scopeId" | "action" | "elapsedMs"
+      >,
+    ) => {
+      if (
+        epoch !== this.generation ||
+        sequence !== this.lookupSequence ||
+        signal.aborted
+      )
+        return;
+      this.lastLookup = {
+        cwd: input.cwd,
+        sessionId: input.sessionId,
+        data: {
+          projectId: identity.projectId,
+          scopeId: identity.scopeId,
+          action: reflect ? "reflect" : "search",
+          elapsedMs: performance.now() - started,
+          ...data,
+        },
+      };
+    };
+    try {
+      if (reflect) {
+        const text = await this.deps
+          .createWriter(config)
+          .reflect(request, signal);
+        check();
+        record({ state: "succeeded", resultBytes: Buffer.byteLength(text) });
+        return text;
+      }
+      const facts = await this.deps
+        .createReader(config)
+        .recall(request, signal);
       check();
+      const safe = facts.filter(
+        (fact) =>
+          request.tag_groups[0].or.some((group) =>
+            sameTags(fact.tags, group.tags),
+          ) && !containsSecretData(fact),
+      );
+      let omitted = facts.length - safe.length;
+      while (
+        safe.length &&
+        Buffer.byteLength(JSON.stringify({ facts: safe, omitted })) >
+          config.maxContextBytes
+      ) {
+        safe.pop();
+        omitted++;
+      }
+      const text = JSON.stringify({ facts: safe, omitted });
+      record({
+        state: "succeeded",
+        resultBytes: Buffer.byteLength(text),
+        fetchedFacts: facts.length,
+        includedFacts: safe.length,
+        omittedFacts: omitted,
+        factIds: safeRecordIds(safe.map((fact) => fact.id)),
+      });
       return text;
+    } catch (error) {
+      record({
+        state: "failed",
+        code: error instanceof MemoryError ? error.code : "lookup-failed",
+      });
+      throw error;
     }
-    const facts = await this.deps.createReader(config).recall(request, signal);
-    check();
-    const safe = facts.filter(
-      (fact) =>
-        request.tag_groups[0].or.some((group) =>
-          sameTags(fact.tags, group.tags),
-        ) && !containsSecretData(fact),
-    );
-    let omitted = facts.length - safe.length;
-    while (
-      safe.length &&
-      Buffer.byteLength(JSON.stringify({ facts: safe, omitted })) >
-        config.maxContextBytes
-    ) {
-      safe.pop();
-      omitted++;
-    }
-    return JSON.stringify({ facts: safe, omitted });
   }
 
   async resume(input: RuntimeInput): Promise<void> {
@@ -225,7 +286,6 @@ export class MemoryRuntime {
   async initializeStartup(
     input: RuntimeInput,
     refresh = false,
-    scope?: "current" | "common",
     signal = new AbortController().signal,
   ) {
     const binding = await this.bound(input, signal);
@@ -233,23 +293,13 @@ export class MemoryRuntime {
       throw new MemoryError("startup-disabled");
     const { config, identity, check } = binding;
     const candidates = [
-      ...(scope !== "current" && config.common
-        ? [{ kind: "common" as const, binding: config.common }]
-        : []),
-      ...(scope !== "common"
-        ? [
-            {
-              kind: "scope" as const,
-              binding: {
-                modelId: config.scopeModels[identity.scopeId] as string,
-                tags: [identity.scopeTag],
-              },
-            },
-          ]
-        : []),
+      {
+        binding: {
+          modelId: config.scopeModels[identity.scopeId] as string,
+          tags: [identity.scopeTag],
+        },
+      },
     ];
-    if (!candidates.length)
-      throw new MemoryError("common-scope-not-configured");
     const client = this.deps.createStartupClient(config);
     const results = await Promise.all(
       candidates.map(async (candidate) => {
@@ -263,7 +313,6 @@ export class MemoryRuntime {
           client,
           config,
           candidate.binding,
-          candidate.kind,
           signal,
           refresh,
           check,
@@ -275,14 +324,129 @@ export class MemoryRuntime {
     return results;
   }
 
+  private evidenceStore(config: MemoryConfig): EvidenceStore | undefined {
+    if (!config.evidence) return undefined;
+    const key = fingerprint(config.evidence);
+    let store = this.evidenceStores.get(key);
+    if (!store) {
+      store = new EvidenceStore(config.evidence);
+      this.evidenceStores.set(key, store);
+    }
+    return store;
+  }
+
+  async recordEvidence(
+    input: RuntimeInput,
+    event: EvidenceEvent,
+    signal?: AbortSignal,
+  ): Promise<"recorded" | "disabled" | "failed"> {
+    try {
+      const binding = await this.bound(input, signal);
+      if (!binding) return "disabled";
+      const store = this.evidenceStore(binding.config);
+      if (!store) return "disabled";
+      if (
+        event.scopeId !== binding.identity.scopeId ||
+        event.projectId !== binding.identity.projectId ||
+        event.sessionId !== input.sessionId
+      )
+        throw new MemoryError("evidence-binding-changed");
+      binding.check();
+      const lookup =
+        event.type === "lookup-result" &&
+        event.data.state === "produced" &&
+        this.lastLookup?.data.state === "succeeded" &&
+        this.lastLookup?.cwd === input.cwd &&
+        this.lastLookup.sessionId === input.sessionId &&
+        this.lastLookup.data.scopeId === event.scopeId
+          ? this.lastLookup.data
+          : undefined;
+      await store.append({
+        ...event,
+        data: {
+          ...event.data,
+          ...(lookup ? { lookup } : {}),
+          configurationId: fingerprint([
+            binding.config.endpoint,
+            binding.config.bankId,
+            binding.config.scopeModels,
+            binding.config.maxContextBytes,
+            binding.config.timeoutMs,
+            binding.config.startupModels,
+            binding.config.evidence,
+          ]),
+        },
+      });
+      this.evidenceError = undefined;
+      this.evidenceWrites++;
+      return "recorded";
+    } catch (error) {
+      if (!(error instanceof MemoryError && error.code === "cancelled")) {
+        this.evidenceFailures++;
+        this.evidenceError =
+          error instanceof MemoryError ? error.code : "evidence-write-failed";
+      }
+      return "failed";
+    }
+  }
+
+  async readEvidence(
+    input: RuntimeInput,
+    requestId?: string,
+    offset = 0,
+    limit = 5,
+    signal?: AbortSignal,
+  ) {
+    const binding = await this.bound(input, signal);
+    if (!binding) throw new MemoryError("memory-disabled");
+    const store = this.evidenceStore(binding.config);
+    if (!store) throw new MemoryError("evidence-disabled");
+    const result = await store.read(
+      binding.identity.scopeId,
+      requestId,
+      offset,
+      limit,
+    );
+    binding.check();
+    return result;
+  }
+
   async status(input: RuntimeInput, signal?: AbortSignal) {
     const binding = await this.bound(input, signal);
-    if (!binding?.config.outboxPath) return { delivery: "disabled" };
+    const scope = binding
+      ? {
+          scopeId: binding.identity.scopeId,
+          projectId: binding.identity.projectId,
+        }
+      : null;
+    const evidence = {
+      enabled: !!binding?.config.evidence,
+      directory: binding?.config.evidence?.directory,
+      retentionDays: binding?.config.evidence?.retentionDays,
+      maxBytes: binding?.config.evidence?.maxBytes,
+      writesThisRuntime: this.evidenceWrites,
+      failuresThisRuntime: this.evidenceFailures,
+      error: this.evidenceError,
+    };
+    const lookup = this.lastLookup;
+    const observation = {
+      lookup:
+        scope &&
+        lookup &&
+        lookup.cwd === input.cwd &&
+        lookup.sessionId === input.sessionId &&
+        lookup.data.scopeId === scope.scopeId &&
+        lookup.data.projectId === scope.projectId
+          ? structuredClone(lookup.data)
+          : null,
+    };
+    if (!binding?.config.outboxPath)
+      return { delivery: "disabled", scope, observation, evidence };
     const delivery = await this.delivery(binding.config);
     binding.check();
     await delivery.flush();
     binding.check();
-    return delivery.status();
+    return { ...delivery.status(), scope, observation, evidence };
   }
 
   async shutdown(): Promise<void> {
@@ -306,6 +470,7 @@ export class MemoryRuntime {
       ? AbortSignal.any([callerSignal, controller.signal])
       : controller.signal;
     const current = () => generation === this.generation && !signal.aborted;
+    let scope: Pick<Identity, "scopeId" | "projectId"> | undefined;
     try {
       let config = await this.deps.loadConfig();
       if (!current()) return undefined;
@@ -315,16 +480,14 @@ export class MemoryRuntime {
         config.catalogPath,
       );
       if (!current()) return undefined;
+      scope = { scopeId: identity.scopeId, projectId: identity.projectId };
       config = startupConfig(config, identity);
       let localDelivery: "idle" | "pending" | "unavailable" = "idle";
       if (config.outboxPath) {
         try {
           const delivery = await this.delivery(config);
           if (!current()) return undefined;
-          const scopes = [
-            [identity.scopeTag],
-            ...(config.common ? [config.common.tags] : []),
-          ];
+          const scopes = [[identity.scopeTag]];
           if (delivery.hasPendingChanges(scopes)) localDelivery = "pending";
           delivery.kick();
         } catch {
@@ -347,6 +510,7 @@ export class MemoryRuntime {
       return {
         status: "unavailable",
         code: error instanceof MemoryError ? error.code : "read-failed",
+        ...(scope ? { scope } : {}),
       };
     } finally {
       if (generation === this.generation) this.controller = undefined;
