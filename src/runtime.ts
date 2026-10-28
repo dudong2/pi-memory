@@ -427,6 +427,9 @@ export class MemoryRuntime {
       writesThisRuntime: this.evidenceWrites,
       failuresThisRuntime: this.evidenceFailures,
       error: this.evidenceError,
+      storage: binding
+        ? this.evidenceStore(binding.config)?.status()
+        : undefined,
     };
     const lookup = this.lastLookup;
     const observation = {
@@ -452,10 +455,13 @@ export class MemoryRuntime {
   async shutdown(): Promise<void> {
     this.reset();
     const pending = [...this.deliveries.values()];
+    const stores = [...this.evidenceStores.values()];
     this.deliveries.clear();
-    await Promise.allSettled(
-      pending.map(async (value) => (await value).close()),
-    );
+    this.evidenceStores.clear();
+    await Promise.allSettled([
+      ...pending.map(async (value) => (await value).close()),
+      ...stores.map((store) => store.close()),
+    ]);
   }
 
   async prepare(

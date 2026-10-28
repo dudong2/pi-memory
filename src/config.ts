@@ -120,7 +120,7 @@ export function parseConfig(value: unknown): MemoryConfig {
       maxBytes: integer(
         evidence.maxBytes,
         256 * 1024 * 1024,
-        4096,
+        256 * 1024,
         1024 * 1024 * 1024,
       ),
     };

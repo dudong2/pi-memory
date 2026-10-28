@@ -16,6 +16,14 @@ import { config, fact, identity, model } from "./helpers.ts";
 
 test("evidence configuration is explicit, private-path only and defaults to the approved retention", () => {
   assert.equal(parseConfig(config).evidence, undefined);
+  assert.throws(
+    () =>
+      parseConfig({
+        ...config,
+        evidence: { directory: "/private/evidence", maxBytes: 64 * 1024 },
+      }),
+    /invalid-config/,
+  );
   const settings = parseConfig({
     ...config,
     evidence: { directory: "/private/evidence" },
@@ -47,7 +55,7 @@ test("tool memory bodies are archived only once observed in a provider payload; 
     evidence: {
       directory: join(root, "evidence"),
       retentionDays: 30,
-      maxBytes: 65536,
+      maxBytes: 1024 * 1024,
     },
   };
   let activeIdentity = identity,
