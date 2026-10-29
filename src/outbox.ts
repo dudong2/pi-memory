@@ -207,7 +207,7 @@ export class Outbox {
   }
   defer(id: string, code: string, terminal = false): void {
     const safe =
-      /^(http-\d{3}|timeout|cancelled|request-failed|invalid-response|operation-failed|operation-missing|operation-mismatch|operation-pending)$/.test(
+      /^(http-\d{3}|timeout|cancelled|request-failed|invalid-response|invalid-operation-id|operation-failed|operation-missing|operation-mismatch|operation-pending)$/.test(
         code,
       )
         ? code

@@ -127,6 +127,7 @@ export class Delivery {
           item.id,
           code,
           code === "operation-mismatch" ||
+            code === "invalid-operation-id" ||
             /http-(400|401|403|409|422)$/.test(code),
         );
       }

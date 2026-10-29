@@ -82,6 +82,27 @@ test("legacy non-current Scope deliveries are preserved but never transmitted", 
   );
 });
 
+test("invalid operation IDs are terminal without discarding the queued payload", async (t) => {
+  const path = await fixture(t);
+  const client = writer();
+  client.operation = async () => {
+    throw new MemoryError("invalid-operation-id");
+  };
+  const delivery = await Delivery.open({ ...config, outboxPath: path }, client);
+  t.after(() => delivery.close());
+  const receipt = delivery.enqueue("invalid-operation", item());
+  await delivery.flush();
+  assert.equal(delivery.status().failed, 1);
+  assert.deepEqual(client.posts, []);
+  db(path, (sql) => {
+    const row = sql
+      .prepare("SELECT payload,error_code FROM deliveries WHERE id=?")
+      .get(receipt.id);
+    assert.ok(row?.payload);
+    assert.equal(row.error_code, "invalid-operation-id");
+  });
+});
+
 test("queue is private, durable, idempotent, and erases confirmed payloads", async (t) => {
   const path = await fixture(t),
     q = await Outbox.open(path, "destination");

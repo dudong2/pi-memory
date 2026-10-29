@@ -94,7 +94,17 @@ export interface Fact {
   document_id?: string;
   source_fact_ids?: string[];
   mentioned_at?: string;
+  context?: string;
+  occurred_start?: string;
+  occurred_end?: string;
+  chunk_id?: string;
   metadata?: Record<string, string>;
+}
+
+export interface StartupOperation {
+  operationId: string;
+  modelId: string;
+  state: Awaited<ReturnType<MemoryWriter["operation"]>>;
 }
 
 export interface RecallRequest {

@@ -22,6 +22,7 @@ import {
   sameTags,
   type PreparedContext,
   type LookupInspection,
+  type StartupOperation,
 } from "./contracts.ts";
 import { resolveIdentity } from "./identity.ts";
 
@@ -411,8 +412,40 @@ export class MemoryRuntime {
     return result;
   }
 
-  async status(input: RuntimeInput, signal?: AbortSignal) {
+  async status(
+    input: RuntimeInput,
+    signal?: AbortSignal,
+    operationId?: string,
+  ) {
     const binding = await this.bound(input, signal);
+    let startupOperation: StartupOperation | undefined;
+    if (operationId !== undefined) {
+      if (!binding) throw new MemoryError("memory-disabled");
+      const { config, identity, check } = binding;
+      const modelId = config.scopeModels[identity.scopeId];
+      if (!modelId) throw new MemoryError("startup-disabled");
+      const client = this.deps.createStartupClient(config);
+      if (!client.getStartupOperation)
+        throw new MemoryError("operation-status-unavailable");
+      const model = await client.getModel(
+        modelId,
+        signal ?? new AbortController().signal,
+      );
+      check();
+      if (
+        !model ||
+        model.id !== modelId ||
+        model.bank_id !== config.bankId ||
+        !sameTags(model.tags, [identity.scopeTag])
+      )
+        throw new MemoryError("startup-scope-mismatch");
+      startupOperation = await client.getStartupOperation(
+        operationId,
+        modelId,
+        signal ?? new AbortController().signal,
+      );
+      check();
+    }
     const scope = binding
       ? {
           scopeId: binding.identity.scopeId,
@@ -444,12 +477,24 @@ export class MemoryRuntime {
           : null,
     };
     if (!binding?.config.outboxPath)
-      return { delivery: "disabled", scope, observation, evidence };
+      return {
+        delivery: "disabled",
+        scope,
+        observation,
+        evidence,
+        ...(startupOperation ? { startupOperation } : {}),
+      };
     const delivery = await this.delivery(binding.config);
     binding.check();
     await delivery.flush();
     binding.check();
-    return { ...delivery.status(), scope, observation, evidence };
+    return {
+      ...delivery.status(),
+      scope,
+      observation,
+      evidence,
+      ...(startupOperation ? { startupOperation } : {}),
+    };
   }
 
   async shutdown(): Promise<void> {

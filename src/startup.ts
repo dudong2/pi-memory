@@ -3,6 +3,7 @@ import {
   type Identity,
   type MemoryConfig,
   type MentalModel,
+  type StartupOperation,
   MemoryError,
   sameTags,
 } from "./contracts.ts";
@@ -30,6 +31,11 @@ export interface StartupClient {
     signal: AbortSignal,
   ): Promise<string>;
   refreshStartupModel(id: string, signal: AbortSignal): Promise<string>;
+  getStartupOperation?(
+    id: string,
+    modelId: string,
+    signal: AbortSignal,
+  ): Promise<StartupOperation>;
 }
 
 export function startupModelId(config: MemoryConfig, tags: string[]): string {

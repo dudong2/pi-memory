@@ -7,6 +7,7 @@ import {
   MemoryError,
   type MemoryReader,
   type MentalModel,
+  type StartupOperation,
   nonempty,
   object,
   type RecallRequest,
@@ -43,6 +44,15 @@ function fact(value: unknown): Fact {
   };
   for (const field of ["document_id", "mentioned_at"] as const) {
     if (row[field] != null) result[field] = nonempty(row[field]);
+  }
+  for (const field of [
+    "context",
+    "occurred_start",
+    "occurred_end",
+    "chunk_id",
+  ] as const) {
+    const value = nullableText(row[field]);
+    if (value !== null) result[field] = value;
   }
   if (row.source_fact_ids != null)
     result.source_fact_ids = tags(row.source_fact_ids);
@@ -236,20 +246,20 @@ export class HindsightClient extends HindsightReader implements MemoryWriter {
     return nonempty(row.operation_id);
   }
 
-  async operation(
-    id: string,
-    signal: AbortSignal,
-  ): ReturnType<MemoryWriter["operation"]> {
+  private async operationResponse(id: string, signal: AbortSignal) {
+    if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id))
+      throw new MemoryError("invalid-operation-id");
     const value = await this.request(
       `operations/${encodeURIComponent(id)}`,
       undefined,
       signal,
       true,
     );
-    if (value === undefined) return "not_found";
+    if (value === undefined) return undefined;
     const row = object(value);
     if (row.operation_id !== id) throw new MemoryError("operation-mismatch");
     const status = nonempty(row.status);
+    if (status === "not_found") return undefined;
     if (
       ![
         "not_found",
@@ -261,7 +271,29 @@ export class HindsightClient extends HindsightReader implements MemoryWriter {
       ].includes(status)
     )
       throw new MemoryError("invalid-response");
-    return status as Awaited<ReturnType<MemoryWriter["operation"]>>;
+    return {
+      state: status as Awaited<ReturnType<MemoryWriter["operation"]>>,
+      modelId:
+        row.mental_model_id == null ? undefined : nonempty(row.mental_model_id),
+    };
+  }
+
+  async operation(
+    id: string,
+    signal: AbortSignal,
+  ): ReturnType<MemoryWriter["operation"]> {
+    return (await this.operationResponse(id, signal))?.state ?? "not_found";
+  }
+
+  async getStartupOperation(
+    id: string,
+    modelId: string,
+    signal: AbortSignal,
+  ): Promise<StartupOperation> {
+    const operation = await this.operationResponse(id, signal);
+    if (operation && operation.modelId !== modelId)
+      throw new MemoryError("operation-scope-mismatch");
+    return { operationId: id, modelId, state: operation?.state ?? "not_found" };
   }
 
   async reflect(request: RecallRequest, signal: AbortSignal): Promise<string> {

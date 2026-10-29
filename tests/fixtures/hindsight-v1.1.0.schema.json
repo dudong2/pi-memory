@@ -1,0 +1,2735 @@
+{
+  "source": "Hindsight 1.1.0 GET /openapi.json; schema only, no bank data",
+  "components": {
+    "schemas": {
+      "AsyncOperationSubmitResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status"
+        ]
+      },
+      "Base64AttachmentSource": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "base64",
+            "default": "base64"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "media_type",
+          "data"
+        ]
+      },
+      "Budget": {
+        "type": "string",
+        "enum": [
+          "low",
+          "mid",
+          "high"
+        ]
+      },
+      "ChildOperationStatus": {
+        "properties": {
+          "operation_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "sub_batch_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status"
+        ]
+      },
+      "ChunkAttachment": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "byte_size": {
+            "type": "integer"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hash",
+          "kind",
+          "media_type",
+          "byte_size",
+          "url"
+        ]
+      },
+      "ChunkData": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "chunk_index": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean",
+            "default": false
+          },
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ChunkAttachment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "chunk_index"
+        ]
+      },
+      "ChunkIncludeOptions": {
+        "properties": {
+          "max_tokens": {
+            "type": "integer",
+            "default": 8192
+          }
+        },
+        "type": "object"
+      },
+      "Content": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/TextContentBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/ImageContentBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/FileContentBlock"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "file": "#/components/schemas/FileContentBlock",
+                  "image": "#/components/schemas/ImageContentBlock",
+                  "text": "#/components/schemas/TextContentBlock"
+                }
+              }
+            },
+            "type": "array"
+          }
+        ]
+      },
+      "CreateMentalModelRequest": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "source_query": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "default": []
+          },
+          "max_tokens": {
+            "type": "integer",
+            "maximum": 8192,
+            "minimum": 256,
+            "default": 2048
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/MentalModelTrigger-Input",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "source_query"
+        ]
+      },
+      "CreateMentalModelResponse": {
+        "properties": {
+          "mental_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operation_id": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id"
+        ]
+      },
+      "EntityIncludeOptions": {
+        "properties": {
+          "max_tokens": {
+            "type": "integer",
+            "default": 500
+          }
+        },
+        "type": "object"
+      },
+      "EntityInput": {
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ]
+      },
+      "EntityObservationResponse": {
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "mentioned_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ]
+      },
+      "EntityStateResponse": {
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "canonical_name": {
+            "type": "string"
+          },
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/EntityObservationResponse"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_id",
+          "canonical_name",
+          "observations"
+        ]
+      },
+      "FactsIncludeOptions": {
+        "properties": {},
+        "type": "object"
+      },
+      "FileContentBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "file"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Base64AttachmentSource"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "source"
+        ]
+      },
+      "ImageContentBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "image"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Base64AttachmentSource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "source"
+        ]
+      },
+      "IncludeOptions": {
+        "properties": {
+          "entities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityIncludeOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": {
+              "max_tokens": 500
+            }
+          },
+          "chunks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChunkIncludeOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_facts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceFactsIncludeOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "MemoryItem": {
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EntityInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolve_entities": {
+            "type": "boolean",
+            "default": true
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observation_scopes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "per_tag",
+                  "combined",
+                  "all_combinations",
+                  "shared"
+                ]
+              },
+              {
+                "items": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "update_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "replace",
+                  "append"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ]
+      },
+      "MentalModelResponse": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "bank_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source_query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "default": []
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MentalModelTrigger-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_refreshed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_memory_seen_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_refresh_failed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_full_refreshed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_knowledge_page": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_response": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_stale": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "bank_id",
+          "name"
+        ]
+      },
+      "MentalModelTrigger-Input": {
+        "properties": {
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Budget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "full",
+              "delta"
+            ],
+            "default": "full"
+          },
+          "refresh_after_consolidation": {
+            "type": "boolean",
+            "default": false
+          },
+          "refresh_cron": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "full_refresh_cron": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min_refresh_interval_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fact_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "world",
+                    "experience",
+                    "observation"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exclude_mental_models": {
+            "type": "boolean",
+            "default": false
+          },
+          "exclude_mental_model_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags_match": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "all",
+                  "any_strict",
+                  "all_strict",
+                  "exact"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag_groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TagGroupLeaf"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupAnd-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupOr-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupNot-Input"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "include_chunks": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recall_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recall_chunks_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_search_observations_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_search_observations_include_entities": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "response_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "keep_trace": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "type": "object"
+      },
+      "MentalModelTrigger-Output": {
+        "properties": {
+          "budget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Budget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "full",
+              "delta"
+            ],
+            "default": "full"
+          },
+          "refresh_after_consolidation": {
+            "type": "boolean",
+            "default": false
+          },
+          "refresh_cron": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "full_refresh_cron": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min_refresh_interval_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fact_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "world",
+                    "experience",
+                    "observation"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exclude_mental_models": {
+            "type": "boolean",
+            "default": false
+          },
+          "exclude_mental_model_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags_match": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "all",
+                  "any_strict",
+                  "all_strict",
+                  "exact"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag_groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TagGroupLeaf"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupAnd-Output"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupOr-Output"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupNot-Output"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "include_chunks": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recall_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recall_chunks_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_search_observations_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_search_observations_include_entities": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "response_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "keep_trace": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "type": "object"
+      },
+      "MinScores": {
+        "properties": {
+          "semantic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "keyword": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reranker": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "final": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "OperationProgress": {
+        "properties": {
+          "stage": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "processed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage",
+          "at"
+        ]
+      },
+      "OperationStatusResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "completed",
+              "failed",
+              "cancelled",
+              "not_found"
+            ]
+          },
+          "operation_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mental_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retry_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_retry_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RefreshMentalModelOperationDetails"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "child_operations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ChildOperationStatus"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status"
+        ]
+      },
+      "RecallRequest": {
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prefer_observations": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "budget": {
+            "$ref": "#/components/schemas/Budget",
+            "default": "mid"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "default": 4096
+          },
+          "trace": {
+            "type": "boolean",
+            "default": false
+          },
+          "query_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "include": {
+            "$ref": "#/components/schemas/IncludeOptions",
+            "default": {}
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags_match": {
+            "type": "string",
+            "enum": [
+              "any",
+              "all",
+              "any_strict",
+              "all_strict",
+              "exact"
+            ],
+            "default": "any"
+          },
+          "tag_groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TagGroupLeaf"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupAnd-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupOr-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupNot-Input"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min_scores": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MinScores"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "temporal_window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemporalWindow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ]
+      },
+      "RecallResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/RecallResult"
+            },
+            "type": "array"
+          },
+          "trace": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entities": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/EntityStateResponse"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chunks": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ChunkData"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_facts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecallResult"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_facts_truncated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ]
+      },
+      "RecallResult": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurred_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurred_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mentioned_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chunk_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_fact_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scores": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecallScores"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ChunkAttachment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ]
+      },
+      "RecallScores": {
+        "properties": {
+          "final": {
+            "type": "number"
+          },
+          "reranker": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "semantic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "keyword": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "final"
+        ]
+      },
+      "ReflectBasedOn": {
+        "properties": {
+          "memories": {
+            "items": {
+              "$ref": "#/components/schemas/ReflectFact"
+            },
+            "type": "array",
+            "default": []
+          },
+          "mental_models": {
+            "items": {
+              "$ref": "#/components/schemas/ReflectMentalModel"
+            },
+            "type": "array",
+            "default": []
+          },
+          "directives": {
+            "items": {
+              "$ref": "#/components/schemas/ReflectDirective"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object"
+      },
+      "ReflectDirective": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "content"
+        ]
+      },
+      "ReflectFact": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurred_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurred_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mentioned_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chunk_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ChunkAttachment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ]
+      },
+      "ReflectIncludeOptions": {
+        "properties": {
+          "facts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FactsIncludeOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tool_calls": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ToolCallsIncludeOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ReflectLLMCall": {
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "duration_ms"
+        ]
+      },
+      "ReflectMentalModel": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ]
+      },
+      "ReflectRequest": {
+        "properties": {
+          "reflect_search_observations_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_search_observations_include_entities": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "type": "string"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/Budget",
+            "default": "low"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true
+          },
+          "max_tokens": {
+            "type": "integer",
+            "default": 4096
+          },
+          "include": {
+            "$ref": "#/components/schemas/ReflectIncludeOptions"
+          },
+          "response_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags_match": {
+            "type": "string",
+            "enum": [
+              "any",
+              "all",
+              "any_strict",
+              "all_strict",
+              "exact"
+            ],
+            "default": "any"
+          },
+          "tag_groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TagGroupLeaf"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupAnd-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupOr-Input"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TagGroupNot-Input"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "apply_all_directives": {
+            "type": "boolean",
+            "default": false
+          },
+          "fact_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "world",
+                    "experience",
+                    "observation"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exclude_mental_models": {
+            "type": "boolean",
+            "default": false
+          },
+          "exclude_mental_model_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ]
+      },
+      "ReflectResponse": {
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "based_on": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReflectBasedOn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "structured_output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "structured_output_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TokenUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReflectTrace"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ]
+      },
+      "ReflectToolCall": {
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "input": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "iteration": {
+            "type": "integer",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool",
+          "input",
+          "duration_ms"
+        ]
+      },
+      "ReflectTrace": {
+        "properties": {
+          "tool_calls": {
+            "items": {
+              "$ref": "#/components/schemas/ReflectToolCall"
+            },
+            "type": "array",
+            "default": []
+          },
+          "llm_calls": {
+            "items": {
+              "$ref": "#/components/schemas/ReflectLLMCall"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object"
+      },
+      "RefreshMentalModelOperationDetails": {
+        "properties": {
+          "operation_type": {
+            "type": "string",
+            "const": "refresh_mental_model",
+            "default": "refresh_mental_model"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "content_written",
+              "content_unchanged",
+              "content_preserved_no_new_facts",
+              "refresh_failed_empty_candidate",
+              "refresh_failed_delta_not_applied",
+              "refresh_failed_structured_output",
+              "refresh_failed_error"
+            ]
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "empty_candidate",
+                  "structured_doc_unreadable",
+                  "delta_ops_failed",
+                  "delta_ops_all_skipped",
+                  "delta_not_applied",
+                  "structured_output_failed",
+                  "retrieval_failed",
+                  "no_answer",
+                  "unexpected_error"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "outcome"
+        ]
+      },
+      "RefreshMentalModelRequest": {
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "full"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "RetainRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryItem"
+            },
+            "type": "array"
+          },
+          "async": {
+            "type": "boolean",
+            "default": false
+          },
+          "document_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ]
+      },
+      "RetainResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "bank_id": {
+            "type": "string"
+          },
+          "items_count": {
+            "type": "integer"
+          },
+          "async": {
+            "type": "boolean"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operation_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TokenUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "bank_id",
+          "items_count",
+          "async"
+        ]
+      },
+      "SourceFactsIncludeOptions": {
+        "properties": {
+          "max_tokens": {
+            "type": "integer",
+            "default": 4096
+          },
+          "max_tokens_per_observation": {
+            "type": "integer",
+            "default": -1
+          }
+        },
+        "type": "object"
+      },
+      "TagGroupAnd-Input": {
+        "properties": {
+          "and": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TagGroupLeaf"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupAnd-Input"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupOr-Input"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupNot-Input"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "and"
+        ]
+      },
+      "TagGroupAnd-Output": {
+        "properties": {
+          "and": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TagGroupLeaf"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupAnd-Output"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupOr-Output"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupNot-Output"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "and"
+        ]
+      },
+      "TagGroupLeaf": {
+        "properties": {
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "any",
+              "all",
+              "any_strict",
+              "all_strict",
+              "exact"
+            ],
+            "default": "any_strict"
+          },
+          "resolve": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "fuzzy"
+            ],
+            "default": "exact"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tags"
+        ]
+      },
+      "TagGroupNot-Input": {
+        "properties": {
+          "not": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TagGroupLeaf"
+              },
+              {
+                "$ref": "#/components/schemas/TagGroupAnd-Input"
+              },
+              {
+                "$ref": "#/components/schemas/TagGroupOr-Input"
+              },
+              {
+                "$ref": "#/components/schemas/TagGroupNot-Input"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "not"
+        ]
+      },
+      "TagGroupNot-Output": {
+        "properties": {
+          "not": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TagGroupLeaf"
+              },
+              {
+                "$ref": "#/components/schemas/TagGroupAnd-Output"
+              },
+              {
+                "$ref": "#/components/schemas/TagGroupOr-Output"
+              },
+              {
+                "$ref": "#/components/schemas/TagGroupNot-Output"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "not"
+        ]
+      },
+      "TagGroupOr-Input": {
+        "properties": {
+          "or": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TagGroupLeaf"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupAnd-Input"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupOr-Input"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupNot-Input"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "or"
+        ]
+      },
+      "TagGroupOr-Output": {
+        "properties": {
+          "or": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TagGroupLeaf"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupAnd-Output"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupOr-Output"
+                },
+                {
+                  "$ref": "#/components/schemas/TagGroupNot-Output"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "or"
+        ]
+      },
+      "TemporalWindow": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "TextContentBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "text"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "text"
+        ]
+      },
+      "TokenUsage": {
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "default": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "default": 0
+          },
+          "total_tokens": {
+            "type": "integer",
+            "default": 0
+          },
+          "cached_tokens": {
+            "type": "integer",
+            "default": 0
+          },
+          "thoughts_tokens": {
+            "type": "integer",
+            "default": 0
+          }
+        },
+        "type": "object"
+      },
+      "ToolCallsIncludeOptions": {
+        "properties": {
+          "output": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "type": "object"
+      }
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import type { TestContext } from "node:test";
 import type { RetainRequest } from "../src/outbox.ts";
 import type {
@@ -87,6 +88,7 @@ export async function fakeServer(
   }[] = [];
   const retained: RetainRequest[] = [];
   const operations = new Map<string, string>();
+  const operationModels = new Map<string, string>();
   let lost = false;
   const models = options.models ?? {
     "user-core": model("user-core"),
@@ -124,13 +126,13 @@ export async function fakeServer(
           response.end("{}");
           return;
         }
-        models[id] = model(id, {
-          tags: body.tags,
-          content: "",
-          is_stale: true,
-        });
-        const operationId = `model-operation-${requests.length}`;
+        models[id] = {
+          ...model(id, { tags: body.tags, content: "", is_stale: true }),
+          name: body.name,
+        };
+        const operationId = randomUUID();
         operations.set(operationId, "processing");
+        operationModels.set(operationId, id);
         if (options.loseModelAcknowledgement && !lost) {
           lost = true;
           response.destroy();
@@ -143,8 +145,12 @@ export async function fakeServer(
         request.method === "POST" &&
         url.pathname.endsWith("/refresh")
       ) {
-        const operationId = `refresh-operation-${requests.length}`;
+        const operationId = randomUUID();
         operations.set(operationId, "processing");
+        operationModels.set(
+          operationId,
+          decodeURIComponent(url.pathname.split("/").at(-2) ?? ""),
+        );
         response.end(
           JSON.stringify({ operation_id: operationId, status: "queued" }),
         );
@@ -183,17 +189,27 @@ export async function fakeServer(
           response.destroy();
           return;
         }
-        response.end(JSON.stringify({ operation_id: retain.operation_id }));
+        response.end(
+          JSON.stringify({
+            success: true,
+            bank_id: decodeURIComponent(url.pathname.split("/").at(-2) ?? ""),
+            items_count: retain.items.length,
+            async: true,
+            operation_id: retain.operation_id,
+          }),
+        );
       } else if (
         request.method === "GET" &&
         url.pathname.includes("/operations/")
       ) {
         const id = decodeURIComponent(url.pathname.split("/").at(-1) ?? "");
-        response.statusCode = operations.has(id) ? 200 : 404;
+        // v1.1 returns HTTP 200 with status=not_found for unknown operations.
+        response.statusCode = 200;
         response.end(
           JSON.stringify({
             operation_id: id,
             status: operations.get(id) ?? "not_found",
+            mental_model_id: operationModels.get(id),
           }),
         );
       } else if (
@@ -236,5 +252,6 @@ export async function fakeServer(
     requests,
     retained,
     operations,
+    operationModels,
   };
 }
