@@ -53,6 +53,7 @@ test("installed entry gates memory tools but offers consent-based onboarding out
         "test-scope": {
           scopeId: "test-scope",
           projectId: "test-project",
+          name: "owned",
           markerPath,
           memoryTag: "legacy:test-scope",
         },
@@ -90,7 +91,7 @@ test("installed entry gates memory tools but offers consent-based onboarding out
     hasUI: false,
     signal: new AbortController().signal,
     sessionManager: { getSessionId: () => "new-session", getBranch: () => [] },
-    ui: { confirm: async () => false, notify: () => {} },
+    ui: { select: async () => undefined, notify: () => {} },
   };
   await startup({ type: "session_start" }, context as never);
   assert.equal(extension.tools.size, 0);
@@ -99,17 +100,35 @@ test("installed entry gates memory tools but offers consent-based onboarding out
   assert.equal(extension.tools.size, 0);
   await assert.rejects(readFile(join(outside, ".pi-memory-scope.json")));
   assert.equal(server.requests.length, 0);
-  const inputs = ["New Project", "New Scope"];
+  const onboardingPrompts: string[] = [];
   const approved = {
     ...context,
     ui: {
-      confirm: async () => true,
-      select: async (_title: string, options: string[]) => options.at(-1),
-      input: async () => inputs.shift(),
+      confirm: async () => {
+        throw new Error("new registration must not ask for confirmation");
+      },
+      select: async (title: string, options: string[]) => {
+        onboardingPrompts.push(title);
+        assert.deepEqual(options, ["Existing", "새 Project 만들기"]);
+        return "Existing";
+      },
+      input: async () => {
+        throw new Error(
+          "existing Project registration must not ask for a name",
+        );
+      },
       notify: () => {},
     },
   };
   await startup({ type: "session_start" }, approved as never);
+  assert.deepEqual(onboardingPrompts, ["outside Scope를 등록할 Project"]);
+  const registered = JSON.parse(await readFile(catalogPath, "utf8"));
+  assert.equal(
+    Object.values(registered.scopes as Record<string, { name: string }>).filter(
+      (scope) => scope.name === "outside",
+    ).length,
+    1,
+  );
   assert.ok(extension.tools.has("hindsight_memory"));
   assert.ok(extension.handlers.has("before_agent_start"));
   assert.equal(extension.handlers.get("session_start")?.length, 1);

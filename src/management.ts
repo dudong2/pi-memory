@@ -135,21 +135,58 @@ export function formatCatalogMatches(
 async function chooseProject(
   config: MemoryConfig,
   ctx: ExtensionContext,
+  scopeName: string,
 ): Promise<ProjectRecord | string | undefined> {
   const catalog = await loadScopeCatalog(location(config));
   const projects = Object.values(catalog.projects).sort((a, b) =>
     a.name.localeCompare(b.name),
   );
-  const labels = projects.map((p) => `${p.name} (${p.projectId})`);
-  const choice = await ctx.ui.select("Scope를 소속시킬 Project", [
+  const labels = projects.map((p) => p.name);
+  let createLabel = newProjectLabel;
+  while (labels.includes(createLabel)) createLabel += "…";
+  const choice = await ctx.ui.select(`${scopeName} Scope를 등록할 Project`, [
     ...labels,
-    newProjectLabel,
+    createLabel,
   ]);
   if (!choice) return undefined;
-  if (choice !== newProjectLabel) return projects[labels.indexOf(choice)];
-  const name = (await ctx.ui.input("새 Project 이름"))?.trim();
-  if (!name) return undefined;
+  if (choice !== createLabel) return projects[labels.indexOf(choice)];
+  const input = await ctx.ui.input("새 Project 이름", scopeName);
+  if (input === undefined) return undefined;
+  const name = input.trim() || scopeName;
   return projectByName(catalog, name) ?? name;
+}
+
+async function chooseScopeName(
+  config: MemoryConfig,
+  ctx: ExtensionContext,
+  projectId: string | undefined,
+  inferred: string,
+  check: () => void,
+): Promise<string | undefined> {
+  const key = (value: string) =>
+    value.normalize("NFC").trim().toLocaleLowerCase("en-US");
+  let name = inferred;
+  for (;;) {
+    check();
+    const catalog = await loadScopeCatalog(location(config));
+    check();
+    const occupied = (candidate: string) =>
+      Object.values(catalog.scopes).some(
+        (scope) =>
+          scope.projectId === projectId && key(scope.name) === key(candidate),
+      );
+    if (!occupied(name)) return name;
+    let suffix = 2;
+    while (occupied(`${inferred}-${suffix}`)) suffix++;
+    const proposed = `${inferred}-${suffix}`;
+    const input = await ctx.ui.input(
+      `Scope 이름 '${name}'이 이미 있습니다. 다른 이름`,
+      proposed,
+    );
+    check();
+    if (input === undefined) return undefined;
+    name = input.trim() || proposed;
+  }
 }
 
 async function repairLocation(
@@ -283,25 +320,19 @@ export async function ensureScopeRegistration(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-  if (
-    !(await ctx.ui.confirm(
-      "이 위치에서 메모리를 사용할까요?",
-      `${root}\n사용하면 Project·Scope를 등록하고 현재 Scope의 대화를 설정된 Hindsight에 저장합니다.`,
-    ))
-  )
-    return false;
-  const project = await chooseProject(config, ctx);
+  const inferred = basename(git?.mainRoot ?? root) || "scope";
+  const project = await chooseProject(config, ctx, inferred);
+  check();
   if (!project) return false;
-  const name = (await ctx.ui.input("Scope 이름", basename(root)))?.trim();
+  let name = await chooseScopeName(
+    config,
+    ctx,
+    typeof project === "string" ? undefined : project.projectId,
+    inferred,
+    check,
+  );
   if (!name) return false;
   const projectName = typeof project === "string" ? project : project.name;
-  if (
-    !(await ctx.ui.confirm(
-      "메모리 Scope 등록",
-      `${projectName}/${name}\n위치: ${root}\n기존 기억과 스킬은 변경하지 않습니다.`,
-    ))
-  )
-    return false;
   check();
   await backup(config, []);
   check();
@@ -312,12 +343,36 @@ export async function ensureScopeRegistration(
       : project;
   try {
     check();
-    await createScope(location(config), {
-      root,
-      projectId: selected.projectId,
-      name,
-      ...(git ? { repositoryId: git.repositoryId } : {}),
-    });
+    for (;;) {
+      check();
+      try {
+        await createScope(location(config), {
+          root,
+          projectId: selected.projectId,
+          name,
+          ...(git ? { repositoryId: git.repositoryId } : {}),
+        });
+        break;
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          error.message !== "scope-name-location-conflict"
+        )
+          throw error;
+        name = await chooseScopeName(
+          config,
+          ctx,
+          selected.projectId,
+          inferred,
+          check,
+        );
+        if (!name) {
+          if (selected.projectId === newId)
+            await removeProjectIfEmpty(location(config), newId);
+          return false;
+        }
+      }
+    }
     await resolveIdentity(ctx.cwd, config.catalogPath);
   } catch (error) {
     if (selected.projectId === newId)

@@ -52,14 +52,51 @@ async function setup(t: test.TestContext) {
   };
 }
 
-test("aborting while onboarding waits for confirmation cannot register a Scope", async (t) => {
-  const { settings, ctx, controller, location } = await setup(t);
-  let confirmations = 0;
-  ctx.ui.confirm = async () => {
-    if (++confirmations === 2) controller.abort();
-    return true;
+for (const stage of [
+  "Project selection",
+  "new Project input",
+  "Scope conflict input",
+] as const) {
+  test(`aborting during ${stage} cannot register routing state`, async (t) => {
+    const { root, settings, ctx, controller, location } = await setup(t);
+    if (stage === "Scope conflict input") {
+      const project = await createProject(location, "Product");
+      const other = join(root, "other");
+      await mkdir(other);
+      await createScope(location, {
+        root: other,
+        projectId: project.projectId,
+        name: "work",
+      });
+      ctx.ui.select = async (_title, options) => options[0];
+    }
+    const before = await loadScopeCatalog(location);
+    if (stage === "Project selection") {
+      ctx.ui.select = async (_title, options) => {
+        controller.abort();
+        return options.at(-1);
+      };
+    } else {
+      ctx.ui.input = async () => {
+        controller.abort();
+        return "name";
+      };
+    }
+    await assert.rejects(ensureScopeRegistration(settings, ctx));
+    assert.deepEqual(await loadScopeCatalog(location), before);
+  });
+}
+
+test("changing location during Project selection cannot register routing state", async (t) => {
+  const { root, settings, ctx, location } = await setup(t);
+  ctx.ui.select = async (_title, options) => {
+    Object.assign(ctx, { cwd: root });
+    return options.at(-1);
   };
-  await assert.rejects(ensureScopeRegistration(settings, ctx));
+  await assert.rejects(
+    ensureScopeRegistration(settings, ctx),
+    /scope-management-context-changed/,
+  );
   assert.deepEqual(await loadScopeCatalog(location), {
     projects: {},
     scopes: {},

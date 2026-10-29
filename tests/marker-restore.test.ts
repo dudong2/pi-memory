@@ -145,12 +145,14 @@ test("a nested unregistered repository cannot restore its parent's missing marke
   const child = join(cwd, "other-repo");
   await mkdir(join(child, ".git"), { recursive: true });
   Object.assign(ctx, { cwd: child });
-  ctx.ui.confirm = async (title) => {
-    confirmations.push(title);
-    return false;
+  let selections = 0;
+  ctx.ui.select = async () => {
+    selections++;
+    return undefined;
   };
   assert.equal(await ensureScopeRegistration(settings, ctx), false);
-  assert.deepEqual(confirmations, ["이 위치에서 메모리를 사용할까요?"]);
+  assert.equal(selections, 1);
+  assert.deepEqual(confirmations, []);
   await assert.rejects(readFile(scope.markerPath));
 });
 
