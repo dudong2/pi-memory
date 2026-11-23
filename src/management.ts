@@ -111,25 +111,41 @@ export function formatCatalogMatches(
     values.some((value) =>
       value.normalize("NFC").toLocaleLowerCase("en-US").includes(query),
     );
-  const projects = Object.values(catalog.projects).filter((p) =>
-    matches([p.projectId, p.name, ...p.aliases]),
+  const byName = (a: { name: string }, b: { name: string }) =>
+    a.name.localeCompare(b.name);
+  const projects = Object.values(catalog.projects).sort(byName);
+  const matchedProjects = new Set(
+    projects
+      .filter((p) => matches([p.projectId, p.name, ...p.aliases]))
+      .map((p) => p.projectId),
   );
-  const scopes = Object.values(catalog.scopes).filter((s) =>
-    matches([
-      s.scopeId,
-      s.name,
-      ...s.aliases,
-      qualifiedScopeName(catalog, s),
-      ...(s.repositoryId ? [s.repositoryId] : []),
-    ]),
-  );
-  return [
-    ...projects.map((p) => `Project ${p.name} (${p.projectId})`),
-    ...scopes.map(
-      (s) =>
-        `Scope ${qualifiedScopeName(catalog, s)} (${s.scopeId})\n  tag=${s.memoryTag}\n  ${dirname(s.markerPath)}`,
-    ),
-  ];
+  const scopeLines = new Map<string | undefined, string[]>();
+  for (const s of Object.values(catalog.scopes).sort(byName)) {
+    const projectId = s.projectId && catalog.projects[s.projectId]?.projectId;
+    if (
+      !(projectId && matchedProjects.has(projectId)) &&
+      !matches([
+        s.scopeId,
+        s.name,
+        ...s.aliases,
+        qualifiedScopeName(catalog, s),
+        ...(s.repositoryId ? [s.repositoryId] : []),
+      ])
+    )
+      continue;
+    const lines = scopeLines.get(projectId) ?? [];
+    lines.push(`  ${s.name}`);
+    scopeLines.set(projectId, lines);
+  }
+  const result = projects.flatMap(({ projectId, name }) => {
+    const lines = scopeLines.get(projectId);
+    return lines || matchedProjects.has(projectId)
+      ? [name, ...(lines ?? [])]
+      : [];
+  });
+  const unassigned = scopeLines.get(undefined);
+  if (unassigned) result.push("소속 Project 없음", ...unassigned);
+  return result;
 }
 
 async function chooseProject(

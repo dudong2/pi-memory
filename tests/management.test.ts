@@ -343,8 +343,8 @@ test("Scope names are rechecked when another registration takes the proposed nam
   );
 });
 
-test("existing catalog lookup is read-only and finds aliases, qualified names and IDs", async (t) => {
-  const { cwd, settings } = await fixture(t),
+test("catalog lookup groups names by Project and stays read-only", async (t) => {
+  const { cwd, root, settings } = await fixture(t),
     location = { catalogPath: settings.catalogPath };
   const project = await createProject(location, "Product", ["old-product"]);
   const scope = await createScope(location, {
@@ -353,10 +353,48 @@ test("existing catalog lookup is read-only and finds aliases, qualified names an
     name: "api",
     aliases: ["backend"],
   });
+  const another = await createProject(location, "Another");
+  await createProject(location, "Empty");
+  for (const [name, projectId] of [
+    ["web", project.projectId],
+    ["client", another.projectId],
+  ] as const) {
+    const scopeRoot = join(root, name);
+    await mkdir(scopeRoot);
+    await createScope(location, { root: scopeRoot, projectId, name });
+  }
   const bytes = await readFile(settings.catalogPath, "utf8"),
     catalog = await loadScopeCatalog(location);
-  for (const query of ["old-product", "Product/api", "backend", scope.scopeId])
-    assert.ok(formatCatalogMatches(catalog, query).length);
+  const legacyScope = {
+    ...scope,
+    scopeId: "legacy-personal",
+    projectId: undefined,
+    name: "personal",
+    aliases: [],
+  };
+  catalog.scopes[legacyScope.scopeId] = legacyScope;
+  assert.deepEqual(formatCatalogMatches(catalog, ""), [
+    "Another",
+    "  client",
+    "Empty",
+    "Product",
+    "  api",
+    "  web",
+    "소속 Project 없음",
+    "  personal",
+  ]);
+  for (const query of ["old-product", project.projectId])
+    assert.deepEqual(formatCatalogMatches(catalog, query), [
+      "Product",
+      "  api",
+      "  web",
+    ]);
+  for (const query of ["Product/api", "backend", scope.scopeId])
+    assert.deepEqual(formatCatalogMatches(catalog, query), [
+      "Product",
+      "  api",
+    ]);
+  assert.deepEqual(formatCatalogMatches(catalog, "unknown"), []);
   assert.equal(await readFile(settings.catalogPath, "utf8"), bytes);
 });
 
